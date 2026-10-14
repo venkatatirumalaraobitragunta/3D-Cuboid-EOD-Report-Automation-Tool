@@ -1,0 +1,709 @@
+const CONFIG = {
+  DEFAULT_ST_SEC: 45,
+  GENERATE_MT_SEC: 360, // Generate Allocation: MT = fixed 360 sec (6:00 min) per object
+  FIT_MT_SEC: 450,      // Fill Full Shift / Auto-Fit: MT = fixed 450 sec (7:30 min) per object
+  FP_SEC: 30,
+  TC_SEC: 900, // 15 mins
+
+  DEFAULT_SHIFT_SEC: 7.5 * 60 * 60, // Fallback only (no location selected)
+
+  DEVELOPER_EMAIL: "bitragunta.t@imerit.net",
+
+  // Google Form EDITOR id (from .../forms/d/<ID>/edit). Used ONLY to detect submissions.
+  // Leave "" to use manual "Confirm Submitted" instead.
+  FORM_ID: "",
+
+  // LOCATION-WISE PRODUCTION SHIFTS
+  // These are final PRODUCTION windows. No extra break deduction is applied.
+  // Duration is calculated directly from start -> end.
+  // (Keep in sync with LOCATION_SHIFTS in Index.html)
+  LOCATIONS: {
+    "Hyderabad": {
+      "Shift 1": { start: "08:00:00", end: "15:30:00", label: "08:00 AM to 03:30 PM" },
+      "Shift 2": { start: "16:00:00", end: "23:30:00", label: "04:00 PM to 11:30 PM" }
+    },
+    "Saltlake": {
+      "Shift 1": { start: "06:00:00", end: "14:00:00", label: "06:00 AM to 02:00 PM" },
+      "Shift 2": { start: "15:00:00", end: "23:00:00", label: "03:00 PM to 11:00 PM" }
+    },
+    "Metiabrux": {
+      "Shift 1": { start: "06:00:00", end: "13:30:00", label: "06:00 AM to 01:30 PM" },
+      "Shift 2": { start: "14:00:00", end: "21:30:00", label: "02:00 PM to 09:30 PM" }
+    }
+  }
+};
+
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile("Index")
+    .setTitle("3D Cuboid EOD Report Automation Tool")
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+function getUserInfo() {
+  try {
+    const email = (Session.getActiveUser().getEmail() || "").toLowerCase().trim();
+    let name = "Buddy";
+    if (email.includes("@")) {
+      const raw = email.split("@")[0].replace(/[._]/g, " ");
+      name = raw.replace(/\b\w/g, c => c.toUpperCase());
+    }
+    const isDeveloper = (email === CONFIG.DEVELOPER_EMAIL.toLowerCase().trim());
+    return { name, email, isDeveloper };
+  } catch (e) {
+    return { name: "Buddy", email: "", isDeveloper: false };
+  }
+}
+
+// -------------------------------------------------------------
+// LIVE ACTIVE USERS TRACKER ENGINE (HEARTBEAT)
+// -------------------------------------------------------------
+function sendHeartbeat() {
+  try {
+    const email = (Session.getActiveUser().getEmail() || "anonymous@imerit.net").toLowerCase().trim();
+    const cache = CacheService.getScriptCache();
+    const raw = cache.get("ACTIVE_USERS_HEARTBEAT");
+    let activeMap = raw ? JSON.parse(raw) : {};
+
+    const rawName = email.split("@")[0].replace(/[._]/g, " ");
+    const name = rawName.replace(/\b\w/g, c => c.toUpperCase());
+
+    const now = Date.now();
+    activeMap[email] = {
+      name: name,
+      email: email,
+      lastSeen: now,
+      timeFormatted: Utilities.formatDate(new Date(now), Session.getScriptTimeZone(), "HH:mm:ss")
+    };
+
+    const threshold = now - (120 * 1000); // 2 minutes threshold
+    Object.keys(activeMap).forEach(key => {
+      if (activeMap[key].lastSeen < threshold) {
+        delete activeMap[key];
+      }
+    });
+
+    cache.put("ACTIVE_USERS_HEARTBEAT", JSON.stringify(activeMap), 300);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+function getLiveActiveUsers() {
+  try {
+    const callerEmail = (Session.getActiveUser().getEmail() || "").toLowerCase().trim();
+    if (callerEmail !== CONFIG.DEVELOPER_EMAIL.toLowerCase().trim()) {
+      return { authorized: false, count: 0, users: [] };
+    }
+
+    const cache = CacheService.getScriptCache();
+    const raw = cache.get("ACTIVE_USERS_HEARTBEAT");
+    if (!raw) return { authorized: true, count: 0, users: [] };
+
+    const activeMap = JSON.parse(raw);
+    const now = Date.now();
+    const threshold = now - (120 * 1000);
+
+    const activeList = [];
+    Object.keys(activeMap).forEach(key => {
+      if (activeMap[key].lastSeen >= threshold) {
+        activeList.push(activeMap[key]);
+      }
+    });
+
+    return {
+      authorized: true,
+      count: activeList.length,
+      users: activeList
+    };
+  } catch (err) {
+    return { authorized: false, count: 0, users: [] };
+  }
+}
+
+// -------------------------------------------------------------
+// LOCATION / SHIFT HELPERS
+// -------------------------------------------------------------
+function timeStrToSec(timeStr) {
+  const p = String(timeStr).split(":").map(Number);
+  return (p[0] || 0) * 3600 + (p[1] || 0) * 60 + (p[2] || 0);
+}
+
+// Production duration = end - start (handles overnight windows)
+function calcDurationSec(startStr, endStr) {
+  const startSec = timeStrToSec(startStr);
+  let endSec = timeStrToSec(endStr);
+  if (endSec <= startSec) endSec += 24 * 3600;
+  return endSec - startSec;
+}
+
+// Optional: lets the front end read the config from the server if ever needed
+function getLocationConfig() {
+  return CONFIG.LOCATIONS;
+}
+
+// -------------------------------------------------------------
+// CORE ALLOCATION ENGINE
+// -------------------------------------------------------------
+function generateAllocation(payload) {
+  if (!payload || typeof payload !== "object") {
+    throw new Error("Invalid request payload.");
+  }
+
+  const date = String(payload.date || "").trim();
+  const location = String(payload.location || "").trim();
+  const shift = String(payload.shift || "").trim();
+  const customStartTime = String(payload.customStartTime || "").trim();
+  const customEndTime = String(payload.customEndTime || "").trim();
+  const targetSTSec = CONFIG.DEFAULT_ST_SEC;
+  const downtimeMin = Math.max(0, Number(payload.downtimeMin || 0));
+  const fitToShift = Boolean(payload.fitToShift);
+  const tasks = payload.tasks || [];
+
+  if (!date) throw new Error("Please select a valid date.");
+  if (!location || !CONFIG.LOCATIONS[location]) throw new Error("Please select a valid Location (Hyderabad, Saltlake or Metiabrux).");
+  if (!Array.isArray(tasks) || tasks.length === 0) throw new Error("Please enter at least one task row.");
+
+  let resolvedStartTime = "08:00:00";
+  let resolvedEndTime = "15:30:00";
+  let totalShiftSec = CONFIG.DEFAULT_SHIFT_SEC;
+  let shiftLabel = "";
+
+  if (shift === "Custom") {
+    if (!customStartTime || !customEndTime) {
+      throw new Error("Please specify both Start Time and End Time for Custom Shift.");
+    }
+    resolvedStartTime = customStartTime.length === 5 ? `${customStartTime}:00` : customStartTime;
+    resolvedEndTime = customEndTime.length === 5 ? `${customEndTime}:00` : customEndTime;
+
+    totalShiftSec = calcDurationSec(resolvedStartTime, resolvedEndTime);
+    if (totalShiftSec <= 0) throw new Error("Custom End Time must be greater than Start Time.");
+    shiftLabel = `${location} — Custom Shift (${resolvedStartTime.slice(0, 5)} to ${resolvedEndTime.slice(0, 5)})`;
+  } else if (CONFIG.LOCATIONS[location][shift]) {
+    // Predefined production shift: use start/end directly. NO break deduction.
+    const def = CONFIG.LOCATIONS[location][shift];
+    resolvedStartTime = def.start;
+    resolvedEndTime = def.end;
+    totalShiftSec = calcDurationSec(def.start, def.end);
+    shiftLabel = `${location} — ${shift} (${def.label})`;
+  } else {
+    throw new Error(`Invalid shift "${shift}" for location ${location}.`);
+  }
+
+  const downtimeSec = downtimeMin * 60;
+  if (downtimeSec >= totalShiftSec) {
+    throw new Error(`Downtime cannot be equal to or greater than total shift duration (${Math.round(totalShiftSec / 60)} mins).`);
+  }
+
+  const effectiveShiftCapacitySec = totalShiftSec - downtimeSec;
+
+  const seenTaskIds = new Set();
+  const cleanedTasks = tasks.map((task, index) => {
+    const batchId = String(task.batchId || "").trim();
+    const taskId = String(task.taskId || "").trim();
+    const uniqueName = String(task.uniqueName || "").trim();
+
+    const valSt = Number(task.valSt || 0);
+    const valMt = Number(task.valMt || 0);
+    const misSt = Number(task.misSt || 0);
+    const misMt = Number(task.misMt || 0);
+    const prSt = Number(task.prSt || 0);
+    const prMt = Number(task.prMt || 0);
+
+    const fp = Number(task.fp || 0);
+    const tc = String(task.tc || "No").trim().toLowerCase() === "yes" ? "Yes" : "No";
+    const status = String(task.status || (tc === "Yes" ? "Done" : "WIP")).trim();
+
+    if (!taskId) throw new Error(`Row ${index + 1}: Task ID is mandatory.`);
+    const key = taskId.toLowerCase();
+    if (seenTaskIds.has(key)) throw new Error(`Duplicate Task ID found: ${taskId}`);
+    seenTaskIds.add(key);
+
+    return { batchId, taskId, uniqueName, valSt, valMt, misSt, misMt, prSt, prMt, fp, tc, status };
+  });
+
+  let fixedNonProductiveSec = 0;
+  let totalSTCount = 0;
+  let totalMTCount = 0;
+
+  cleanedTasks.forEach(task => {
+    fixedNonProductiveSec += (task.fp * CONFIG.FP_SEC);
+    if (task.tc === "Yes") fixedNonProductiveSec += CONFIG.TC_SEC;
+    totalSTCount += (task.valSt + task.misSt + task.prSt);
+    totalMTCount += (task.valMt + task.misMt + task.prMt);
+  });
+
+  // FP + TC alone not fitting is a hard input error in Auto-Fit mode (nothing left to scale into).
+  // In Generate mode we do NOT block: the excess workload is shown as Surplus instead.
+  if (fitToShift && fixedNonProductiveSec > effectiveShiftCapacitySec) {
+    throw new Error("FP + TC workload exceeds the available productive shift duration.");
+  }
+
+  const remainingForProductive = Math.max(0, effectiveShiftCapacitySec - fixedNonProductiveSec);
+
+  // ---------------------------------------------------------------
+  // RATES
+  // GENERATE ALLOCATION:
+  //   ST = exactly the selected TPST (never scaled)
+  //   MT = fixed 360 sec (6:00 min) (never scaled)
+  //   If the workload is larger than the shift, the rates are NOT changed.
+  //   The excess is reported as Surplus through `progress` / `summary`.
+  //   The generated TIMELINE is capped at the shift end.
+  //
+  // FILL FULL SHIFT / AUTO-FIT (unchanged behaviour):
+  //   ST = selected TPST, MT = 450 sec, then both are scaled so the shift is filled exactly.
+  // ---------------------------------------------------------------
+  let actualSTRate = targetSTSec;
+  let actualMTRate = CONFIG.GENERATE_MT_SEC;
+
+  if (fitToShift) {
+    actualSTRate = targetSTSec;
+    actualMTRate = CONFIG.FIT_MT_SEC;
+    const fitBenchmarkProductive = (totalSTCount * actualSTRate) + (totalMTCount * actualMTRate);
+    if (fitBenchmarkProductive > 0) {
+      const fitScale = remainingForProductive / fitBenchmarkProductive;
+      actualSTRate = actualSTRate * fitScale;
+      actualMTRate = actualMTRate * fitScale;
+    }
+  }
+
+  // Generate mode only: full (uncapped) workload, used for Surplus / productive time.
+  let requiredSeconds = 0;
+  let requiredProductiveSec = 0;
+
+  let currentSeconds = 0;
+  const results = cleanedTasks.map(task => {
+    const taskResult = {
+      batchId: task.batchId,
+      taskId: task.taskId,
+      uniqueName: task.uniqueName,
+      valSt: task.valSt, valMt: task.valMt,
+      misSt: task.misSt, misMt: task.misMt,
+      prSt: task.prSt, prMt: task.prMt,
+      fp: task.fp, tc: task.tc, status: task.status,
+      valStSec: 0, valMtSec: 0, misStSec: 0, misMtSec: 0, prStSec: 0, prMtSec: 0, fpSec: 0, tcSec: 0,
+      valStStart: "NA", valStEnd: "NA",
+      valMtStart: "NA", valMtEnd: "NA",
+      misStStart: "NA", misStEnd: "NA",
+      misMtStart: "NA", misMtEnd: "NA",
+      prStStart: "NA", prStEnd: "NA",
+      prMtStart: "NA", prMtEnd: "NA",
+      fpStart: "NA", fpEnd: "NA",
+      tcStart: "NA", tcEnd: "NA"
+    };
+
+    const stages = [
+      { key: "valSt", count: task.valSt, rate: actualSTRate },
+      { key: "valMt", count: task.valMt, rate: actualMTRate },
+      { key: "misSt", count: task.misSt, rate: actualSTRate },
+      { key: "misMt", count: task.misMt, rate: actualMTRate },
+      { key: "prSt", count: task.prSt, rate: actualSTRate },
+      { key: "prMt", count: task.prMt, rate: actualMTRate },
+      { key: "fp", count: task.fp, rate: CONFIG.FP_SEC },
+      { key: "tc", count: task.tc === "Yes" ? 1 : 0, rate: CONFIG.TC_SEC }
+    ];
+
+    stages.forEach(stage => {
+      if (fitToShift) {
+        // ---- Auto-Fit: UNCHANGED ----
+        if (stage.count > 0 && currentSeconds < effectiveShiftCapacitySec) {
+          let duration = Math.floor(stage.count * stage.rate);
+
+          if (currentSeconds + duration > effectiveShiftCapacitySec) {
+            duration = Math.max(0, effectiveShiftCapacitySec - currentSeconds);
+          }
+
+          taskResult[`${stage.key}Sec`] = duration;
+          taskResult[`${stage.key}Start`] = formatDateTime(date, resolvedStartTime, currentSeconds);
+          taskResult[`${stage.key}End`] = formatDateTime(date, resolvedStartTime, currentSeconds + duration);
+          currentSeconds += duration;
+        }
+        return;
+      }
+
+      // ---- Generate: timeline is capped at the shift end; full workload tracked separately ----
+      if (stage.count > 0) {
+        const fullDuration = Math.floor(stage.count * stage.rate);
+        requiredSeconds += fullDuration;
+        if (stage.key !== "fp" && stage.key !== "tc") requiredProductiveSec += fullDuration;
+
+        const duration = Math.min(fullDuration, Math.max(0, effectiveShiftCapacitySec - currentSeconds));
+
+        taskResult[`${stage.key}Sec`] = duration;
+        taskResult[`${stage.key}Start`] = formatDateTime(date, resolvedStartTime, currentSeconds);
+        taskResult[`${stage.key}End`] = formatDateTime(date, resolvedStartTime, currentSeconds + duration);
+        currentSeconds += duration;
+      }
+    });
+
+    return taskResult;
+  });
+
+  // Zero-variance clamping: Auto-Fit ONLY.
+  // (Generate must never stretch durations, otherwise the selected TPST would drift.)
+  if (fitToShift && currentSeconds > 0 && currentSeconds < effectiveShiftCapacitySec) {
+    const slackSeconds = effectiveShiftCapacitySec - currentSeconds;
+    const lastTask = results[results.length - 1];
+
+    const activeStageKeys = ["tc", "fp", "prMt", "prSt", "misMt", "misSt", "valMt", "valSt"];
+    for (let i = 0; i < activeStageKeys.length; i++) {
+      const key = activeStageKeys[i];
+      if (lastTask[`${key}Sec`] > 0) {
+        lastTask[`${key}Sec`] += slackSeconds;
+        lastTask[`${key}End`] = formatDateTime(date, resolvedStartTime, effectiveShiftCapacitySec);
+        currentSeconds = effectiveShiftCapacitySec;
+        break;
+      }
+    }
+  }
+
+  // Auto-Fit: productive = sum of scaled stage durations (unchanged).
+  // Generate: productive = full required productive time (timeline itself is capped).
+  const productiveSec = fitToShift
+    ? results.reduce((sum, t) => sum + t.valStSec + t.valMtSec + t.misStSec + t.misMtSec + t.prStSec + t.prMtSec, 0)
+    : requiredProductiveSec;
+
+  // Required workload: Generate = full uncapped workload, Auto-Fit = timeline (== capacity).
+  const requiredTotalSec = fitToShift ? currentSeconds : requiredSeconds;
+
+  const remainingSec = Math.max(0, effectiveShiftCapacitySec - currentSeconds);
+  const overSec = Math.max(0, requiredTotalSec - effectiveShiftCapacitySec); // = Surplus
+  const overCapacity = overSec > 0;
+
+  const effectiveEndFormatted = formatDateTime(date, resolvedStartTime, effectiveShiftCapacitySec).split(" ")[1].slice(0, 5);
+  const shiftStartFormatted = resolvedStartTime.slice(0, 5);
+
+  // -------------------------------------------------------------
+  // SHARED PROGRESS BAR DATA (single source of truth for the UI)
+  // Reuses effectiveShiftCapacitySec / downtimeSec / remainingForProductive
+  // computed above, so there is no second downtime calculation.
+  // -------------------------------------------------------------
+  // Generate mode: MT = 360s fixed.  Auto-Fit mode: MT = 450s fixed.
+  const benchmarkMtSec = fitToShift ? CONFIG.FIT_MT_SEC : CONFIG.GENERATE_MT_SEC;
+  const benchmarkRatio = targetSTSec > 0 ? benchmarkMtSec / targetSTSec : 1;
+
+  // Generate mode: required workload vs effective shift (can be > 100% = Surplus)
+  const fillPct = effectiveShiftCapacitySec > 0 ? (requiredTotalSec / effectiveShiftCapacitySec) * 100 : 0;
+
+  // Auto-Fit mode: workload vs capacity at the target ST rate
+  const benchmarkCapacityUnits = targetSTSec > 0 ? remainingForProductive / targetSTSec : 0;
+  const currentWorkloadUnits = totalSTCount + (totalMTCount * benchmarkRatio);
+  const benchmarkPct = benchmarkCapacityUnits > 0 ? (currentWorkloadUnits / benchmarkCapacityUnits) * 100 : 0;
+  const additionalUnits = Math.max(0, Math.floor(benchmarkCapacityUnits - currentWorkloadUnits));
+
+  const progress = {
+    mode: fitToShift ? "autofit" : "generate",
+    totalShiftSec: totalShiftSec,
+    downtimeSec: downtimeSec,
+    effectiveSec: effectiveShiftCapacitySec,
+    allocatedSec: currentSeconds,
+    requiredSec: requiredTotalSec,
+    remainingSec: remainingSec,
+    overSec: overSec,
+    surplusSec: overSec,
+    overCapacity: overCapacity,
+    fillPct: fillPct,
+    targetSTSec: targetSTSec,
+    targetMTSec: benchmarkMtSec,
+    currentSTRate: actualSTRate,
+    stGapSec: actualSTRate - targetSTSec,
+    productiveCapacitySec: remainingForProductive,
+    fixedNonProductiveSec: fixedNonProductiveSec,
+    benchmarkRatio: benchmarkRatio,
+    benchmarkCapacityUnits: benchmarkCapacityUnits,
+    currentWorkloadUnits: currentWorkloadUnits,
+    benchmarkPct: benchmarkPct,
+    additionalUnits: additionalUnits,
+    additionalMT: benchmarkRatio > 0 ? Math.floor(additionalUnits / benchmarkRatio) : 0
+  };
+
+  return {
+    success: true,
+    date,
+    location,
+    shift,
+    shiftLabel,
+    startTime: resolvedStartTime,
+    endTime: resolvedEndTime,
+    shiftWindow: `${shiftStartFormatted} to ${effectiveEndFormatted}`,
+    downtimeMin,
+    targetSTSec,
+    actualSTSec: actualSTRate,
+    actualMTSec: actualMTRate,
+    fitToShift,
+    summary: {
+      productiveSec,
+      nonProductiveSec: fixedNonProductiveSec,
+      downtimeSec: downtimeSec,
+      totalSec: currentSeconds,
+      requiredSec: requiredTotalSec,
+      availableSec: effectiveShiftCapacitySec,
+      remainingSec,
+      overSec,
+      overCapacity,
+      stObjects: totalSTCount,
+      mtObjects: totalMTCount
+    },
+    progress,
+    tasks: results
+  };
+}
+
+function formatDateTime(dateString, startTimeStr, secondsFromShiftStart) {
+  const normalizedDate = dateString.replace(/\//g, "-");
+  const parts = normalizedDate.split("-");
+
+  let year, month, day;
+  if (parts.length === 3 && parts[0].length === 4) {
+    year = Number(parts[0]);
+    month = Number(parts[1]) - 1;
+    day = Number(parts[2]);
+  } else {
+    const fallback = new Date(dateString);
+    year = fallback.getFullYear();
+    month = fallback.getMonth();
+    day = fallback.getDate();
+  }
+
+  const shiftStart = startTimeStr.split(":").map(Number);
+  const base = new Date(year, month, day, shiftStart[0], shiftStart[1], shiftStart[2] || 0);
+  const result = new Date(base.getTime() + Math.round(secondsFromShiftStart) * 1000);
+
+  return Utilities.formatDate(result, Session.getScriptTimeZone(), "M/d/yyyy HH:mm:ss");
+}
+
+// -------------------------------------------------------------
+// FORM SUBMISSION CHECK (used by the "Form Filled" state)
+// Returns { configured, submitted }. Matches a response (submitted after the form
+// was opened) that contains the Task ID in any answer.
+// -------------------------------------------------------------
+function checkFormSubmitted(taskId, openedAtMs) {
+  if (!CONFIG.FORM_ID) return { configured: false, submitted: false };
+  try {
+    const form = FormApp.openById(CONFIG.FORM_ID);
+    const since = new Date(Number(openedAtMs || 0) - 60000);
+    const target = String(taskId || "").trim().toLowerCase();
+    const submitted = form.getResponses(since).some(r =>
+      r.getItemResponses().some(ir => String(ir.getResponse()).trim().toLowerCase() === target)
+    );
+    return { configured: true, submitted: submitted };
+  } catch (e) {
+    return { configured: false, submitted: false, error: e.message };
+  }
+}
+
+function submitUserFeedback(feedbackData) {
+  if (!feedbackData) throw new Error("No feedback data provided.");
+
+  const rating = feedbackData.rating || "No rating";
+  const name = feedbackData.name || "Anonymous Annotator";
+  const comments = feedbackData.comments || "No comments written.";
+  const activeUser = Session.getActiveUser().getEmail() || "User (Session Access)";
+
+  const subject = `[Tool Feedback] Rating: ${rating}⭐ from ${name}`;
+  const body = `Hello,\n\nYou have received user experience feedback for the 3D Cuboid EOD Report Automation Tool:\n\n- Rating: ${rating} / 5 Stars\n- User Name: ${name}\n- Logged User Email: ${activeUser}\n- Comments: ${comments}\n\nTimestamp: ${new Date().toLocaleString()}`;
+
+  MailApp.sendEmail({ to: CONFIG.DEVELOPER_EMAIL, subject: subject, body: body });
+  return { success: true };
+}
+
+// -------------------------------------------------------------
+// DAILY ACTIVITY LOG
+// Still used by sendDailyUsageSummaryEmail() (developer's daily summary).
+// The automatic personal shift-end email scheduling that used to run
+// from here has been removed.
+// -------------------------------------------------------------
+function recordFormFillEvent(eventData) {
+  try {
+    let userEmail = Session.getActiveUser().getEmail();
+    if (!userEmail) userEmail = "Anonymous / Shared User";
+    userEmail = userEmail.toLowerCase().trim();
+
+    const props = PropertiesService.getScriptProperties();
+    const todayKey = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
+
+    const existingRaw = props.getProperty("DAILY_LOG_" + todayKey);
+    let logList = existingRaw ? JSON.parse(existingRaw) : [];
+
+    logList.push({
+      email: userEmail,
+      taskId: eventData && eventData.taskId ? eventData.taskId : "Unknown",
+      status: eventData && eventData.status ? eventData.status : "WIP",
+      location: eventData && eventData.location ? eventData.location : "Unknown",
+      shift: eventData && eventData.shift ? eventData.shift : "Shift 1",
+      time: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "HH:mm:ss")
+    });
+
+    props.setProperty("DAILY_LOG_" + todayKey, JSON.stringify(logList));
+
+    return { success: true };
+  } catch (err) {
+    console.error("Error logging event: ", err);
+    return { success: false, error: err.message };
+  }
+}
+
+function sendDailyUsageSummaryEmail() {
+  const props = PropertiesService.getScriptProperties();
+  const timeZone = Session.getScriptTimeZone();
+
+  const now = new Date();
+  const yesterday = new Date(now.getTime() - (24 * 60 * 60 * 1000));
+  const reportDateKey = Utilities.formatDate(yesterday, timeZone, "yyyy-MM-dd");
+
+  const rawLogs = props.getProperty("DAILY_LOG_" + reportDateKey);
+
+  if (!rawLogs) {
+    MailApp.sendEmail({
+      to: CONFIG.DEVELOPER_EMAIL,
+      subject: `[3D Cuboid EOD Report] ${reportDateKey} - 0 Users Active`,
+      body: `Hello,\n\nOn ${reportDateKey} (Full Day up to 23:59), no users submitted forms via the 3D Cuboid EOD Report Automation Tool.\n\nTotal Active Users: 0`
+    });
+    return;
+  }
+
+  const logs = JSON.parse(rawLogs);
+  const userMap = {};
+  logs.forEach(item => {
+    const email = item.email || "Unknown";
+    userMap[email] = (userMap[email] || 0) + 1;
+  });
+
+  const uniqueUsers = Object.keys(userMap);
+  const totalUniqueUsers = uniqueUsers.length;
+
+  let userRowsHtml = "";
+  uniqueUsers.forEach((email, idx) => {
+    const rawName = email.split("@")[0].replace(/[._]/g, " ");
+    const formattedName = rawName.replace(/\b\w/g, c => c.toUpperCase());
+
+    userRowsHtml += `<tr>
+      <td style="padding: 10px 14px; border: 1px solid #e2e8f0; text-align: center; color: #64748b;">${idx + 1}</td>
+      <td style="padding: 10px 14px; border: 1px solid #e2e8f0; font-weight: 600; color: #1e293b;">${formattedName} <span style="font-size: 11px; color: #94a3b8; font-weight: normal;">(${email})</span></td>
+      <td style="padding: 10px 14px; border: 1px solid #e2e8f0; text-align: center; font-weight: 700; color: #4338ca;">${userMap[email]}</td>
+    </tr>`;
+  });
+
+  const emailSubject = `📊 [3D Cuboid EOD Report] ${reportDateKey} - Total Users: ${totalUniqueUsers}`;
+  const emailHtml = `
+    <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; color: #1e293b;">
+      <h3 style="color: #4338ca; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 12px;">3D Cuboid EOD Report Automation Tool (${reportDateKey})</h3>
+      <p style="font-size: 13px; color: #475569; margin-bottom: 16px;">Full day activity recorded up to 23:59.<br>Total Unique Users: <strong>${totalUniqueUsers}</strong></p>
+      <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+        <thead>
+          <tr style="background: #f8fafc; color: #475569; text-align: left;">
+            <th style="padding: 10px 14px; border: 1px solid #e2e8f0; text-align: center; width: 60px;">S.No</th>
+            <th style="padding: 10px 14px; border: 1px solid #e2e8f0;">User Name</th>
+            <th style="padding: 10px 14px; border: 1px solid #e2e8f0; text-align: center; width: 130px;">Forms Clicked</th>
+          </tr>
+        </thead>
+        <tbody>${userRowsHtml}</tbody>
+      </table>
+    </div>
+  `;
+
+  MailApp.sendEmail({ to: CONFIG.DEVELOPER_EMAIL, subject: emailSubject, htmlBody: emailHtml });
+}
+
+function setupDailyEodTrigger() {
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(t => {
+    if (t.getHandlerFunction() === "sendDailyUsageSummaryEmail") {
+      ScriptApp.deleteTrigger(t);
+    }
+  });
+
+  ScriptApp.newTrigger("sendDailyUsageSummaryEmail").timeBased().everyDays(1).atHour(0).create();
+  Logger.log("Daily Midnight Trigger set successfully!");
+}
+
+// -------------------------------------------------------------
+// ONE-TIME CLEANUP: personal shift-end email feature (removed)
+// Run this ONCE manually from the Apps Script editor after saving.
+// It deletes ONLY:
+//   1) triggers whose handler is exactly "sendPersonalShiftEndReportTrigger"
+//   2) legacy script properties named SCHEDULED_<yyyy-MM-dd>_...
+//      (including any ..._SENT markers that follow that same pattern)
+//   3) V2 script properties named SCHEDULED_V2_...
+//      (including their ..._SENT markers)
+// It does NOT touch: the daily summary trigger (sendDailyUsageSummaryEmail),
+// DAILY_LOG_* properties, feedback code, or any other trigger / property.
+// After it reports 0 remaining, you may delete this function.
+// -------------------------------------------------------------
+function cleanupPersonalShiftEndEmailFeature() {
+  const HANDLER_NAME = "sendPersonalShiftEndReportTrigger";
+  const LEGACY_PROP_PATTERN = /^SCHEDULED_\d{4}-\d{2}-\d{2}_/;
+  const V2_PROP_PATTERN = /^SCHEDULED_V2_/;
+
+  // 1) Triggers (exact handler-name match only)
+  let triggersDeleted = 0;
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (t.getHandlerFunction() === HANDLER_NAME) {
+      ScriptApp.deleteTrigger(t);
+      triggersDeleted++;
+    }
+  });
+
+  // 2) Script properties (legacy + V2, including _SENT markers)
+  const props = PropertiesService.getScriptProperties();
+  let legacyPropsDeleted = 0;
+  let v2PropsDeleted = 0;
+  let v2SentMarkersDeleted = 0;
+
+  props.getKeys().forEach(key => {
+    if (V2_PROP_PATTERN.test(key)) {
+      props.deleteProperty(key);
+      v2PropsDeleted++;
+      if (/_SENT$/.test(key)) v2SentMarkersDeleted++;
+    } else if (LEGACY_PROP_PATTERN.test(key)) {
+      props.deleteProperty(key);
+      legacyPropsDeleted++;
+    }
+  });
+
+  // 3) Verify
+  const remainingTriggers = ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === HANDLER_NAME).length;
+  const remainingProps = props.getKeys()
+    .filter(k => V2_PROP_PATTERN.test(k) || LEGACY_PROP_PATTERN.test(k)).length;
+
+  const summary = {
+    triggersDeleted: triggersDeleted,
+    legacyPropertiesDeleted: legacyPropsDeleted,
+    v2PropertiesDeleted: v2PropsDeleted,
+    v2SentMarkersDeleted: v2SentMarkersDeleted,
+    remainingPersonalShiftEndTriggers: remainingTriggers,
+    remainingScheduledProperties: remainingProps
+  };
+  Logger.log("Cleanup complete: " + JSON.stringify(summary));
+  return summary;
+}
+
+// -------------------------------------------------------------
+// OPTIONAL READ-ONLY AUDIT (deletes nothing)
+// Run before and after the cleanup to see what exists.
+// You may delete this function once you have verified the result.
+// -------------------------------------------------------------
+function auditPersonalShiftEndEmailFeature() {
+  const HANDLER_NAME = "sendPersonalShiftEndReportTrigger";
+  const LEGACY_PROP_PATTERN = /^SCHEDULED_\d{4}-\d{2}-\d{2}_/;
+  const V2_PROP_PATTERN = /^SCHEDULED_V2_/;
+
+  const triggers = ScriptApp.getProjectTriggers();
+  const keys = PropertiesService.getScriptProperties().getKeys();
+
+  const report = {
+    personalShiftEndTriggers: triggers.filter(t => t.getHandlerFunction() === HANDLER_NAME).length,
+    dailySummaryTriggers: triggers.filter(t => t.getHandlerFunction() === "sendDailyUsageSummaryEmail").length,
+    otherTriggerHandlers: triggers.map(t => t.getHandlerFunction())
+      .filter(h => h !== HANDLER_NAME && h !== "sendDailyUsageSummaryEmail"),
+    legacyScheduledProperties: keys.filter(k => LEGACY_PROP_PATTERN.test(k)).length,
+    v2ScheduledProperties: keys.filter(k => V2_PROP_PATTERN.test(k)).length,
+    dailyLogProperties: keys.filter(k => k.indexOf("DAILY_LOG_") === 0).length,
+    // Keys that look related but do NOT match the cleanup patterns (these are NOT deleted):
+    possibleUnmatchedLeftovers: keys.filter(k =>
+      (/SCHEDULED|_SENT$/.test(k)) && !LEGACY_PROP_PATTERN.test(k) && !V2_PROP_PATTERN.test(k))
+  };
+  Logger.log("Audit: " + JSON.stringify(report, null, 2));
+  return report;
+}
