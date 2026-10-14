@@ -1,0 +1,3075 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>3D Cuboid EOD Report Automation Tool</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root {
+      --bg: #f4f6f9;
+      --card-bg: #ffffff;
+      --text: #20242b;
+      --subtext: #747b87;
+      --border: #e4e7ec;
+      --input-border: #d9dde5;
+      --primary: #4e60c7;
+      --primary-hover: #4354b7;
+      --accent: #4338ca;
+      --highlight: #eef2ff;
+      --table-header: #f8f9fa;
+      --table-hover: #f7f8fc;
+      --table-stripe: #fcfcfd;
+    }
+
+    body.dark-mode {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --text: #f1f5f9;
+      --subtext: #94a3b8;
+      --border: #334155;
+      --input-border: #475569;
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --accent: #818cf8;
+      --highlight: #1e1b4b;
+      --table-header: #1e293b;
+      --table-hover: #334155;
+      --table-stripe: #1e293b;
+    }
+
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      transition: background-color 0.2s, color 0.2s;
+    }
+    button, input, select, textarea { font-family: inherit; }
+
+    /* FLOATING TOP TOAST NOTIFICATION */
+    .toast-popup {
+      position: fixed;
+      top: -80px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 12px 28px;
+      border-radius: 30px;
+      color: #ffffff;
+      font-weight: 700;
+      font-size: 14px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+      transition: top 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.4s ease;
+      opacity: 0;
+      z-index: 10000;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .toast-popup.show {
+      top: 24px;
+      opacity: 1;
+    }
+    .toast-hii {
+      background: linear-gradient(135deg, #10b981, #059669);
+      border: 1px solid #34d399;
+    }
+    .toast-bye {
+      background: linear-gradient(135deg, #f43f5e, #e11d48);
+      border: 1px solid #fb7185;
+    }
+
+    .container {
+      max-width: 1540px;
+      margin: 0 auto;
+      padding: 24px 20px 48px;
+    }
+
+    .app-locked {
+      pointer-events: none;
+      opacity: 0.45;
+      filter: grayscale(40%);
+      user-select: none;
+      transition: opacity 0.3s ease, filter 0.3s ease;
+    }
+
+    .header {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px 24px;
+      margin-bottom: 18px;
+      box-shadow: 0 4px 16px rgba(31, 41, 55, 0.05);
+    }
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      background: var(--highlight);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      color: var(--primary);
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+    .header p {
+      margin: 4px 0 0;
+      color: var(--subtext);
+      font-size: 13px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .dark-mode-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .dark-mode-btn:hover { background: var(--highlight); }
+
+    /* DEVELOPER-ONLY LIVE BADGE */
+    .live-users-badge {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 20px;
+      border: 1px solid #bbf7d0;
+      background: #f0fdf4;
+      color: #166534;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .live-users-badge:hover {
+      background: #dcfce7;
+      transform: translateY(-1px);
+    }
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #22c55e;
+      animation: pulse 1.5s infinite;
+    }
+
+    .feedback-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 20px;
+      border: 1px solid #fde047;
+      background: #fefce8;
+      color: #854d0e;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .feedback-btn:hover { background: #fef9c3; transform: translateY(-1px); }
+
+    .app-status-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 20px;
+      border: 1px solid #c7d2fe;
+      background: #eef2ff;
+      color: #4338ca;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 6px rgba(67, 56, 202, 0.15);
+    }
+    .app-status-btn:hover {
+      background: #e0e7ff;
+      transform: translateY(-1px);
+    }
+    .app-status-btn.enabled {
+      background: #fff1f2;
+      color: #e11d48;
+      border-color: #fecdd3;
+      box-shadow: 0 2px 6px rgba(225, 29, 72, 0.15);
+    }
+    .app-status-btn.enabled:hover {
+      background: #ffe4e6;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #6366f1;
+      animation: pulse 1.5s infinite;
+    }
+    .app-status-btn.enabled .status-dot {
+      background: #e11d48;
+      animation: none;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.9); opacity: 0.8; }
+      50% { transform: scale(1.2); opacity: 1; }
+      100% { transform: scale(0.9); opacity: 0.8; }
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 3px 12px rgba(31, 41, 55, 0.04);
+    }
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .form-row-flexible {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+      align-items: end;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--subtext);
+      letter-spacing: 0.2px;
+      text-transform: uppercase;
+    }
+    input, select, textarea {
+      width: 100%;
+      height: 38px;
+      padding: 0 10px;
+      border: 1px solid var(--input-border);
+      border-radius: 8px;
+      background: var(--card-bg);
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    textarea {
+      height: 80px;
+      padding: 8px 10px;
+      resize: vertical;
+    }
+    input:hover, select:hover, textarea:hover { border-color: var(--primary); }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+    select:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .reverse-calc-box {
+      margin-top: 14px;
+      padding: 12px 16px;
+      background: var(--table-header);
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 12px;
+    }
+    .reverse-calc-title { font-weight: 700; color: var(--text); }
+    .reverse-calc-metrics { display: flex; gap: 16px; color: var(--subtext); }
+    .reverse-calc-metrics strong { color: var(--primary); }
+
+    .reference {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+    .reference-box {
+      position: relative;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px 12px 16px;
+      overflow: hidden;
+    }
+    .reference-box::before {
+      content: "";
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 3px;
+      background: var(--primary);
+    }
+    .reference-box strong {
+      display: block;
+      font-size: 14px;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .reference-box span { font-size: 12px; color: var(--subtext); }
+
+    .task-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 14px;
+      transition: border-color .15s;
+    }
+    .task-card:hover { border-color: var(--primary); }
+    .task-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .task-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .task-number-badge {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      background: var(--highlight);
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .task-title { font-size: 13px; font-weight: 700; color: var(--text); }
+
+    .task-meta-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 0.8fr 0.8fr;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .category-counts-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      background: var(--table-header);
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .category-box { display: flex; flex-direction: column; gap: 6px; }
+    .category-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--primary);
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+    .category-inputs { display: flex; gap: 8px; }
+
+    .button-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+      align-items: center;
+    }
+    button {
+      border: 0;
+      cursor: pointer;
+      border-radius: 8px;
+      height: 38px;
+      padding: 0 16px;
+      font-size: 12px;
+      font-weight: 700;
+      transition: transform .12s, box-shadow .12s, background-color .12s, opacity .12s;
+    }
+    button:active { transform: translateY(1px); }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .primary {
+      background: var(--primary);
+      color: #ffffff;
+      box-shadow: 0 2px 6px rgba(78,96,199,.20);
+    }
+    .primary:hover:not(:disabled) { background: var(--primary-hover); }
+
+    .fit-shift-btn {
+      background: #0ea5e9;
+      color: #ffffff;
+      box-shadow: 0 2px 6px rgba(14,165,233,.25);
+    }
+    .fit-shift-btn:hover:not(:disabled) { background: #0284c7; }
+
+    .secondary { background: var(--highlight); color: var(--text); border: 1px solid var(--border); }
+    .secondary:hover { background: var(--border); }
+    .add-btn {
+      background: var(--highlight);
+      color: var(--primary);
+      border: 1px solid var(--border);
+    }
+    .add-btn:hover { background: var(--border); }
+    .danger {
+      background: #fff1f1;
+      color: #c13b3b;
+      border: 1px solid #ffdede;
+      height: 30px;
+      padding: 0 10px;
+      font-size: 11px;
+    }
+    .danger:hover { background: #ffe8e8; }
+
+    .reset-btn {
+      background: #fee2e2;
+      color: #b91c1c;
+      border: 1px solid #fecaca;
+    }
+    .reset-btn:hover { background: #fecaca; }
+
+    .utility-btn {
+      background: var(--card-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      font-size: 11px;
+      height: 32px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 12px;
+      border-radius: 6px;
+    }
+    .utility-btn:hover { background: var(--highlight); border-color: var(--primary); }
+
+    .message {
+      padding: 10px 14px;
+      border-radius: 8px;
+      margin-top: 14px;
+      display: none;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .message.success { display: block; background: #eff9f1; border: 1px solid #d5eed9; color: #287139; }
+    .message.error { display: block; background: #fff1f1; border: 1px solid #f3d3d3; color: #ad3030; }
+
+    .output-section { padding: 0; overflow: hidden; }
+    .output-top {
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+    .output-title { font-size: 16px; font-weight: 700; color: var(--text); }
+    .output-subtitle { font-size: 12px; color: var(--subtext); margin-top: 4px; }
+    .shift-pill {
+      padding: 6px 12px;
+      background: var(--highlight);
+      color: var(--primary);
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .filter-wrap { display: flex; align-items: center; gap: 8px; }
+    .search-input {
+      height: 32px;
+      width: 200px;
+      font-size: 12px;
+      padding: 0 10px;
+      border-radius: 6px;
+    }
+
+    .variance-alert {
+      margin: 0 18px 12px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    body.dark-mode .variance-alert {
+      background: #450a0a;
+      border-color: #7f1d1d;
+      color: #fecaca;
+    }
+
+    /* SHARED PROGRESS BAR CARD (Generate = shift fill, Auto-Fit = target benchmark) */
+    .target-gap-card {
+      margin: 0 18px 14px;
+      padding: 14px 18px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--table-header);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+    }
+    .target-gap-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+    .target-gap-track {
+      width: 100%;
+      height: 9px;
+      background: rgba(148, 163, 184, 0.2);
+      border-radius: 6px;
+      overflow: hidden;
+      position: relative;
+    }
+    .target-gap-fill {
+      width: 0%;
+      height: 100%;
+      transition: width 0.4s ease, background 0.4s ease;
+    }
+    .gap-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 18px;
+    }
+    .gap-chip { white-space: nowrap; }
+    .gap-chip-label { color: var(--subtext); }
+    .gap-chip strong { color: var(--text); }
+    .gap-note {
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--subtext);
+      font-style: italic;
+    }
+    .gap-stale {
+      display: none;
+      margin-top: 8px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      color: #b45309;
+    }
+    body.dark-mode .gap-stale { color: #fbbf24; }
+
+    .legend-bar {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      padding: 12px 18px;
+      background: var(--table-header);
+      border-bottom: 1px solid var(--border);
+    }
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--subtext);
+    }
+    .legend-dot { width: 9px; height: 9px; border-radius: 50%; }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 10px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .status-green { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+    .status-yellow { background: #fef9c3; color: #a16207; border: 1px solid #fef08a; }
+    .status-red { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+    .status-gray { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 10px;
+      padding: 16px 18px;
+    }
+    .summary-box {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 10px;
+    }
+    .summary-box .label {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--subtext);
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      margin-bottom: 4px;
+    }
+    .summary-box .value { 
+      font-size: 13px; 
+      font-weight: 750; 
+      color: var(--text); 
+      display: flex; 
+      align-items: center; 
+      gap: 4px; 
+      flex-wrap: wrap; 
+    }
+
+    .table-wrap { width: 100%; overflow-x: auto; border-top: 1px solid var(--border); }
+    table { width: 100%; min-width: 1450px; border-collapse: separate; border-spacing: 0; background: var(--card-bg); }
+    th {
+      position: sticky; top: 0; z-index: 2;
+      background: var(--table-header); color: var(--subtext);
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px;
+      padding: 12px 14px; border-bottom: 1px solid var(--border); text-align: left;
+    }
+    td {
+      padding: 12px 14px; font-size: 12px; color: var(--text);
+      border-bottom: 1px solid var(--border); vertical-align: middle; white-space: nowrap;
+    }
+    tbody tr:nth-child(even) { background: var(--table-stripe); }
+    tbody tr:hover { background: var(--table-hover); }
+
+    .task-id-cell { font-weight: 700; color: var(--primary); min-width: 140px; }
+    .task-number { display: block; color: var(--subtext); font-size: 9px; font-weight: 700; text-transform: uppercase; margin-bottom: 2px; }
+
+    .task-counts-card {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-width: 120px;
+      background: var(--table-header);
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    .task-counts-card .sub-count {
+      font-size: 10px;
+      color: var(--subtext);
+      display: flex;
+      justify-content: space-between;
+    }
+    .task-counts-card .total-count-badge {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--primary);
+      border-top: 1px dashed var(--border);
+      padding-top: 3px;
+      margin-top: 2px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .task-status-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .status-done { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+    .status-wip { background: #fef9c3; color: #a16207; border: 1px solid #fef08a; }
+    .status-baddata { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+    .status-crash { background: #ffedd5; color: #c2410c; border: 1px solid #fed7aa; }
+    .status-hold { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+
+    .allocation-time { display: block; font-size: 11px; font-weight: 700; color: var(--text); }
+    .timing-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      margin-top: 4px;
+    }
+    .time-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      color: var(--subtext);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .copy-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-size: 9px;
+      cursor: pointer;
+      color: var(--text);
+      height: 18px;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      transition: background 0.15s, color 0.15s;
+    }
+    .copy-btn:hover { background: var(--highlight); color: var(--primary); }
+
+    .fill-form-btn {
+      background: var(--highlight);
+      color: var(--accent);
+      border: 1px solid #c7d2fe;
+      border-radius: 6px;
+      padding: 0 10px;
+      font-size: 11px;
+      font-weight: 700;
+      height: 28px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all .15s;
+    }
+    .fill-form-btn:hover { background: #e0e7ff; }
+
+    .fill-form-btn.form-filled {
+      background: #dcfce7;
+      color: #15803d;
+      border-color: #86efac;
+    }
+    .fill-form-btn.form-filled:hover { background: #bbf7d0; }
+
+    .tc-yes {
+      display: inline-flex; align-items: center; justify-content: center;
+      height: 24px; padding: 0 8px; border-radius: 6px;
+      background: #fff4e5; color: #a66408; font-size: 10px; font-weight: 700;
+    }
+    .tc-no {
+      display: inline-flex; align-items: center; justify-content: center;
+      height: 24px; padding: 0 8px; border-radius: 6px;
+      background: var(--highlight); color: var(--subtext); font-size: 10px; font-weight: 700;
+    }
+    .output-remove {
+      height: 28px; padding: 0 10px; border-radius: 6px;
+      background: #fff2f2; border: 1px solid #ffdada; color: #c33b3b; font-size: 10px; font-weight: 700;
+    }
+    .output-remove:hover { background: #ffe8e8; }
+    .empty-output { padding: 48px 20px; text-align: center; color: var(--subtext); font-size: 13px; }
+    .empty-output-title { color: var(--text); font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+
+    .app-footer {
+      margin-top: 36px;
+      padding: 20px 24px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--subtext);
+    }
+    .footer-credit-title { font-weight: 700; color: var(--text); font-size: 13px; }
+    .footer-details { display: flex; gap: 20px; flex-wrap: wrap; align-items: center; }
+    .footer-item { display: inline-flex; align-items: center; gap: 5px; }
+    .footer-item strong { color: var(--text); }
+    .footer-item a { color: var(--primary); text-decoration: none; font-weight: 600; }
+    .footer-item a:hover { text-decoration: underline; }
+
+    .modal {
+      display: none; position: fixed; inset: 0;
+      background: rgba(20, 24, 32, .45);
+      align-items: center; justify-content: center; z-index: 999;
+    }
+    .modal-box {
+      width: 90%; max-width: 540px; background: var(--card-bg);
+      border-radius: 12px; padding: 22px; box-shadow: 0 15px 40px rgba(0,0,0,.25);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .modal-box h3 { margin: 0 0 8px; font-size: 16px; }
+    .modal-box p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--subtext); }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+
+    .star-group { display: flex; gap: 8px; margin: 14px 0; }
+    .star-item { font-size: 24px; cursor: pointer; color: #cbd5e1; transition: color 0.15s, transform 0.15s; }
+    .star-item:hover, .star-item.selected { color: #f59e0b; transform: scale(1.1); }
+
+    @media (max-width: 1100px) {
+      .task-meta-grid { grid-template-columns: 1fr 1fr; }
+      .category-counts-grid { grid-template-columns: 1fr; }
+      .summary { grid-template-columns: repeat(4, 1fr); }
+    }
+    @media (max-width: 768px) {
+      .summary { grid-template-columns: repeat(2, 1fr); }
+      .reference { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    /* =====================================================================
+       PRODUCTION REFERENCE CALCULATOR (NEW, ISOLATED)
+       Every selector below is scoped under .refCalc_container and every
+       class starts with refCalc_. Nothing above this block was changed.
+       ===================================================================== */
+    .refCalc_container {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin: 16px 0 16px;
+      box-shadow: 0 3px 12px rgba(31, 41, 55, 0.04);
+      color: var(--text);
+    }
+    .refCalc_container .refCalc_title {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      color: var(--text);
+    }
+    .refCalc_container .refCalc_subtitle {
+      font-size: 12px;
+      color: var(--subtext);
+      margin-bottom: 16px;
+    }
+    .refCalc_container .refCalc_grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+      align-items: end;
+    }
+    .refCalc_container .refCalc_field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .refCalc_container .refCalc_hint {
+      font-size: 11px;
+      color: var(--subtext);
+    }
+    .refCalc_container .refCalc_message {
+      display: none;
+      margin-top: 12px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      background: #fff1f1;
+      border: 1px solid #f3d3d3;
+      color: #ad3030;
+    }
+    .refCalc_container .refCalc_message.refCalc_show { display: block; }
+    .refCalc_container .refCalc_tableWrap {
+      width: 100%;
+      overflow-x: auto;
+      margin-top: 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .refCalc_container table.refCalc_table {
+      width: 100%;
+      min-width: 0;
+      border-collapse: collapse;
+      background: var(--card-bg);
+    }
+    .refCalc_container table.refCalc_table th {
+      position: static;
+      background: var(--table-header);
+      color: var(--subtext);
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+    }
+    .refCalc_container table.refCalc_table td {
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--text);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+    .refCalc_container table.refCalc_table tbody tr:last-child td { border-bottom: 0; }
+    .refCalc_container table.refCalc_table tbody tr:nth-child(even) { background: transparent; }
+    .refCalc_container table.refCalc_table tbody tr:hover { background: var(--table-hover); }
+    .refCalc_container .refCalc_mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-weight: 700;
+    }
+    .refCalc_container .refCalc_big { font-size: 15px; font-weight: 800; color: var(--primary); }
+    .refCalc_container .refCalc_checkInput {
+      height: 30px;
+      width: 120px;
+      font-size: 12px;
+    }
+    .refCalc_container .refCalc_badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 10px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .refCalc_container .refCalc_green  { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+    .refCalc_container .refCalc_yellow { background: #fef9c3; color: #a16207; border: 1px solid #fef08a; }
+    .refCalc_container .refCalc_red    { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+    .refCalc_container .refCalc_gray   { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
+    .refCalc_container .refCalc_note {
+      margin-top: 10px;
+      font-size: 11px;
+      color: var(--subtext);
+    }
+  </style>
+</head>
+
+<body>
+  <!-- TOP FLOATING TOAST -->
+  <div id="toastNotification" class="toast-popup"></div>
+
+  <div class="container">
+    <div class="header">
+      <div class="header-top">
+        <div class="brand">
+          <div class="brand-icon">⏱</div>
+          <div>
+            <h1>3D Cuboid EOD Report Automation Tool</h1>
+            <p>Task-based production time allocation & EOD report automation</p>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <button type="button" class="dark-mode-btn" onclick="toggleDarkMode()">
+            <span id="darkModeIcon">🌙</span> Dark Mode
+          </button>
+          
+          <!-- DEVELOPER-ONLY LIVE BADGE -->
+          <button type="button" id="liveUsersBadge" class="live-users-badge" onclick="openLiveUsersModal()">
+            <span class="live-dot"></span>
+            <span id="liveUsersCountText">Live: 1</span>
+          </button>
+
+          <!-- ALWAYS VISIBLE FEEDBACK BUTTON -->
+          <button type="button" id="headerFeedbackBtn" class="feedback-btn" onclick="openFeedbackModal()">
+            ⭐ Share Feedback
+          </button>
+
+          <button type="button" id="toggleAppBtn" class="app-status-btn" onclick="toggleToolStatus()">
+            <span class="status-dot"></span>
+            <span id="btnStatusText">Hii Buddy (Click to Enable)</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="mainAppContent" class="app-locked">
+      <div class="card">
+        <div class="card-title">Shift Details & Target</div>
+        <div class="form-row-flexible">
+          <div class="field">
+            <label for="date">Date</label>
+            <input type="date" id="date" onchange="autoSave()">
+          </div>
+
+          <!-- NEW: LOCATION -->
+          <div class="field">
+            <label for="location" style="color: #6366f1;">Location</label>
+            <select id="location" onchange="handleLocationChange()">
+              <option value="">Select Location</option>
+              <option value="Hyderabad">Hyderabad</option>
+              <option value="Saltlake">Saltlake</option>
+              <option value="Metiabrux">Metiabrux</option>
+            </select>
+          </div>
+
+          <!-- SHIFT (options are filled dynamically from the selected Location) -->
+          <div class="field">
+            <label for="shift">Shift</label>
+            <select id="shift" onchange="handleShiftChange()"></select>
+          </div>
+          <div class="field" id="customStartTimeField" style="display: none;">
+            <label for="customStartTime" style="color: #6366f1;">Custom Start Time</label>
+            <input type="time" id="customStartTime" value="09:00" onchange="updateRefLabel(); autoSave();">
+          </div>
+          <div class="field" id="customEndTimeField" style="display: none;">
+            <label for="customEndTime" style="color: #6366f1;">Custom End Time</label>
+            <input type="time" id="customEndTime" value="17:30" onchange="updateRefLabel(); autoSave();">
+          </div>
+          <div class="field">
+            <label for="downtimeMin" style="color: #ea580c;">Downtime / Meeting (Min)</label>
+            <input type="number" id="downtimeMin" placeholder="Optional (e.g. 15)" min="0" max="720" step="1" oninput="updateRefLabel(); autoSave();">
+          </div>
+        </div>
+
+        <div class="reverse-calc-box">
+          <div>
+            <div class="reverse-calc-title">🎯 Reverse Target Planner</div>
+            <span id="reverseCalcDesc" style="color: var(--subtext);">Standard benchmark (7:30 hrs @ 45s ST / 6:00m MT target):</span>
+          </div>
+          <div class="reverse-calc-metrics">
+            <span>Required ST Count: <strong id="reqStCount">~600</strong></span>
+            <span>or MT Count: <strong id="reqMtCount">~75</strong></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Time Reference</div>
+        <div class="reference">
+          <div class="reference-box">
+            <strong>ST Rate</strong>
+            <span id="refSTRate">Selected: 45 sec / object</span>
+          </div>
+          <div class="reference-box">
+            <strong>MT Rate</strong>
+            <span id="refMTRate">6:00 min (360 sec) / object</span>
+          </div>
+          <div class="reference-box">
+            <strong>FP (Fixed)</strong>
+            <span>30 sec / object</span>
+          </div>
+          <div class="reference-box">
+            <strong>TC (Fixed)</strong>
+            <span>15 min / task</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          <span>Task Input <span style="font-size: 11px; font-weight: normal; color: var(--subtext);">(Shortcuts: Alt+A = New Task, Ctrl+Enter = Generate)</span></span>
+          <button type="button" class="utility-btn" onclick="openBulkPasteModal()">📋 Batch/Bulk Paste from Sheet</button>
+        </div>
+        <div id="tasksContainer"></div>
+
+        <button type="button" class="add-btn" onclick="addTask(); autoSave();">+ Add Another Task (Alt+A)</button>
+
+        <div class="button-row">
+          <button type="button" id="generateBtn" class="primary" onclick="generateAllocation(false)">Generate Allocation (Ctrl+Enter)</button>
+          <button type="button" id="fitShiftBtn" class="fit-shift-btn" onclick="generateAllocation(true)">⚡ Fill Full Shift (Auto-Fit Count)</button>
+          <button type="button" class="reset-btn" onclick="openResetModal()">Refresh / Clear All</button>
+        </div>
+
+        <div id="message" class="message"></div>
+      </div>
+
+      <div class="card output-section">
+        <div class="output-top">
+          <div>
+            <div class="output-title">Allocation Output</div>
+            <div id="outputSubtitle" class="output-subtitle">Generate an allocation to view task timings.</div>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <div class="filter-wrap" id="searchFilterBox" style="display: none;">
+              <input type="text" id="tableSearchInput" class="search-input" placeholder="🔍 Search Task / Batch ID..." onkeyup="filterTableRows()">
+            </div>
+            <button type="button" id="exportCsvBtn" class="utility-btn" onclick="exportToCsv()" style="display: none;">📥 Export CSV</button>
+            <button type="button" id="copyEodBtn" class="utility-btn" onclick="copyEodSummary(this)" style="display: none;">📋 Copy EOD Summary</button>
+            <div id="shiftPill" class="shift-pill" style="display:none;"></div>
+          </div>
+        </div>
+
+        <div id="varianceAlert" class="variance-alert" style="display: none;">
+          ⚠️ <strong>Variance Alert:</strong> <span id="varianceMessage"></span>
+        </div>
+
+        <!-- SHARED PROGRESS BAR (ONE BAR, TWO MODES):
+             Generate Allocation  -> Shift Allocation Progress (required workload vs shift)
+             Fill Full Shift      -> Target-rate benchmark progress (workload vs capacity)
+             Bar color + badge always come from the shared status (computeSharedStatus). -->
+        <div id="targetGapCard" class="target-gap-card" style="display: none;">
+          <div class="target-gap-header">
+            <span id="targetGapTitle" style="font-size: 13px; font-weight: 700; color: var(--text);">Shift Pace Status</span>
+            <span id="targetGapBadge" style="font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px;"></span>
+          </div>
+          
+          <div class="target-gap-track">
+            <div id="targetGapBar" class="target-gap-fill"></div>
+          </div>
+
+          <div id="targetGapDetails" style="font-size: 12px; margin-top: 8px; line-height: 1.6; color: var(--subtext);"></div>
+          <div id="targetGapStale" class="gap-stale">⟳ Inputs changed since the last run. Click Generate Allocation or Fill Full Shift to refresh this bar.</div>
+        </div>
+
+        <!-- STRICT COLOR LEGEND BAR -->
+        <div id="legendBar" class="legend-bar" style="display:none;">
+          <div class="legend-item"><span class="legend-dot" style="background:#22c55e;"></span> On Track (ST ≤ 45s AND MT ≤ 6 min)</div>
+          <div class="legend-item"><span class="legend-dot" style="background:#eab308;"></span> Close (ST ≤ 60s AND MT ≤ 8 min)</div>
+          <div class="legend-item"><span class="legend-dot" style="background:#ef4444;"></span> Needs Attention (ST > 60s OR MT > 8 min)</div>
+          <div class="legend-item"><span class="legend-dot" style="background:#94a3b8;"></span> No Activity (Total Count = 0)</div>
+        </div>
+
+        <div id="summary" class="summary" style="display:none;">
+          <div class="summary-box">
+            <div class="label">Productive</div>
+            <div class="value" id="productiveValue">00:00:00</div>
+          </div>
+          <div class="summary-box">
+            <div class="label">Non-Productive</div>
+            <div class="value" id="nonProductiveValue">00:00:00</div>
+          </div>
+          <div class="summary-box">
+            <div class="label">Total Counts</div>
+            <div class="value" id="totalCountsValue" style="color: #2563eb; font-size: 11px; line-height: 1.4;">--</div>
+          </div>
+          <div class="summary-box">
+            <!-- UPDATE 2: label text is switched in updateSummary() (Allocation TPST / Auto-Fit TPST) -->
+            <div class="label" id="tpstLabel">Allocation TPST</div>
+            <div class="value" id="tpstValue">--</div>
+          </div>
+          <div class="summary-box">
+            <div class="label">Overall TPST</div>
+            <div class="value" id="overallTpstValue" style="color:#4f46e5;">--</div>
+          </div>
+          <div class="summary-box">
+            <div class="label">Total Allocated</div>
+            <div class="value" id="totalValue">00:00:00</div>
+          </div>
+          <div class="summary-box">
+            <div class="label" id="availableLabel">Available Shift</div>
+            <div class="value" id="availableValue">07:30:00</div>
+          </div>
+          <div class="summary-box">
+            <div class="label" id="remainingLabel">Remaining</div>
+            <div class="value" id="remainingValue" style="flex-direction: column; align-items: flex-start; gap: 2px;">07:30:00</div>
+          </div>
+        </div>
+
+        <div id="outputArea" class="empty-output">
+          <div class="empty-output-title">No allocation generated</div>
+          Enter your task details and generate allocation.
+        </div>
+      </div>
+
+      <div class="app-footer">
+        <div class="footer-credit-title">Developed for 3D Cuboid Annotation Workflow</div>
+        <div class="footer-details">
+          <span class="footer-item"><strong>Developer:</strong> Bitragunta Venkata Tirumalarao</span>
+          <span class="footer-item"><strong>Contact:</strong> <a href="mailto:bitragunta.t@imerit.net">bitragunta.t@imerit.net</a></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         PRODUCTION REFERENCE CALCULATOR (NEW, ISOLATED)
+         Placed OUTSIDE #mainAppContent so it is independent of the
+         "Hii Buddy" enable/lock switch and shares no state with the main tool.
+         ===================================================================== -->
+    <div id="refCalc_container" class="refCalc_container">
+      <div class="refCalc_title">🧮 Production Reference Calculator</div>
+      <div class="refCalc_subtitle">Independent reference tool. It does not read or change the main tool's location, shift or data.</div>
+
+      <div class="refCalc_grid">
+        <div class="refCalc_field">
+          <label for="refCalc_location">Location</label>
+          <select id="refCalc_location">
+            <option value="Hyderabad">Hyderabad</option>
+            <option value="Saltlake">Saltlake</option>
+            <option value="Metiabrux">Metiabrux</option>
+          </select>
+        </div>
+
+        <div class="refCalc_field">
+          <label for="refCalc_mode">Mode</label>
+          <select id="refCalc_mode">
+            <option value="standard" selected>Standard Mode</option>
+            <option value="normal">Normal Mode</option>
+          </select>
+        </div>
+
+        <div class="refCalc_field">
+          <label for="refCalc_workingTime">Working Time (HH:MM:SS)</label>
+          <input type="text" id="refCalc_workingTime" value="07:30:00" placeholder="07:30:00" autocomplete="off" inputmode="numeric">
+        </div>
+
+        <div class="refCalc_field" id="refCalc_countField" style="display: none;">
+          <label for="refCalc_count">Count (whole number)</label>
+          <input type="text" id="refCalc_count" value="" placeholder="e.g. 600" autocomplete="off" inputmode="numeric" pattern="[0-9]*">
+        </div>
+      </div>
+
+      <div id="refCalc_message" class="refCalc_message"></div>
+
+      <div id="refCalc_result"></div>
+    </div>
+  </div>
+
+  <!-- BULK PASTE MODAL -->
+  <div id="bulkPasteModal" class="modal">
+    <div class="modal-box">
+      <h3>Batch / Bulk Paste Tasks</h3>
+      <p>Paste tasks copied directly from Excel / Google Sheets or combined string.<br>
+      <strong>Combined Format:</strong> <code>BatchID + TaskID(UUID) + LSR_ID</code><br>
+      <strong>Tab Format:</strong> <code>Batch | TaskID | UniqueName | ValST | ValMT | MisST | MisMT | PrST | PrMT | FP | TC</code></p>
+      
+      <div style="margin-top: 12px;">
+        <textarea id="bulkPasteInput" style="height: 140px; font-family: monospace; font-size: 11px;" placeholder="Imerit-Batch-Pre-Label-LV-3883-near-range3900c65c-acf3-43e1-b675-7d9a64c2000f6a6d2de24005c6e3bb34a40b"></textarea>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="secondary" onclick="closeBulkPasteModal()">Cancel</button>
+        <button type="button" class="primary" onclick="processBulkPaste()">Import Tasks</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESET MODAL -->
+  <div id="resetModal" class="modal">
+    <div class="modal-box">
+      <h3>Do you Want Reset ?</h3>
+      <p>This will clear all entered tasks, shift inputs, and saved data from your browser.</p>
+      <div class="modal-actions">
+        <button type="button" class="secondary" onclick="closeResetModal()">Cancel</button>
+        <button type="button" class="danger" onclick="confirmReset()">Yes, Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DELETE MODAL -->
+  <div id="deleteModal" class="modal">
+    <div class="modal-box">
+      <h3>Remove Task?</h3>
+      <p>Are you sure you want to remove this task from the allocation output?</p>
+      <div class="modal-actions">
+        <button type="button" class="secondary" onclick="closeDeleteModal()">Cancel</button>
+        <button type="button" class="danger" onclick="confirmDelete()">Remove</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FEEDBACK MODAL -->
+  <div id="feedbackModal" class="modal">
+    <div class="modal-box">
+      <h3>How is your experience? 🚀</h3>
+      <p>Share your feedback about the 3D Cuboid EOD Report Automation Tool.</p>
+      <div style="margin-top: 14px;">
+        <label>Your Rating</label>
+        <div class="star-group" id="starContainer">
+          <span class="star-item" onclick="setRating(1)">★</span>
+          <span class="star-item" onclick="setRating(2)">★</span>
+          <span class="star-item" onclick="setRating(3)">★</span>
+          <span class="star-item" onclick="setRating(4)">★</span>
+          <span class="star-item selected" onclick="setRating(5)">★</span>
+        </div>
+      </div>
+      <div class="field" style="margin-bottom: 12px;">
+        <label>Your Name (Optional)</label>
+        <input type="text" id="feedbackName" placeholder="e.g. Ramesh / Annotator">
+      </div>
+      <div class="field">
+        <label>Feedback / Suggestions</label>
+        <textarea id="feedbackComments" placeholder="What do you like or what can we improve?"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="secondary" onclick="closeFeedbackModal()">Cancel</button>
+        <button type="button" id="submitFeedbackBtn" class="primary" onclick="submitFeedback()">Submit Feedback</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DEVELOPER-ONLY LIVE ACTIVE USERS MODAL -->
+  <div id="liveUsersModal" class="modal">
+    <div class="modal-box">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h3 style="margin:0;">🟢 Live Active Users Online</h3>
+        <button type="button" class="utility-btn" onclick="fetchLiveUsers()">🔄 Refresh</button>
+      </div>
+      <p style="font-size:12px; color:var(--subtext); margin-bottom:14px;">
+        Users who pinged in the last 2 minutes. (Visible only to Developer)
+      </p>
+      <div id="liveUsersListArea" style="max-height:260px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; padding:10px; background:var(--table-header); font-size:12px;">
+        Loading live active annotators...
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="secondary" onclick="closeLiveUsersModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // LOCATION-WISE PRODUCTION SHIFTS
+    // These are final production windows (NO extra break deduction).
+    // Duration = end - start. Keep in sync with CONFIG.LOCATIONS in Code.gs.
+    // =========================================================================
+    const LOCATION_SHIFTS = {
+      "Hyderabad": {
+        "Shift 1": { start: "08:00", end: "15:30" },
+        "Shift 2": { start: "16:00", end: "23:30" }
+      },
+      "Saltlake": {
+        "Shift 1": { start: "06:00", end: "14:00" },
+        "Shift 2": { start: "15:00", end: "23:00" }
+      },
+      "Metiabrux": {
+        "Shift 1": { start: "06:00", end: "13:30" },
+        "Shift 2": { start: "14:00", end: "21:30" }
+      }
+    };
+
+    let generatedData = null;
+    let deleteIndex = null;
+    let lastUsedFitToShift = false;
+    let isAppEnabled = false;
+    let selectedRating = 5;
+    let openedFormsTracker = new Set();   // form was OPENED (not yet submitted)
+    let filledFormsTracker = new Set();   // form was SUBMITTED (confirmed)
+    let manualConfirmTracker = new Set(); // FORM_ID not configured -> manual confirm
+    let formPollTimers = {};
+    let currentUserName = "Buddy";
+    let isUserDeveloper = false;
+    let toastTimer = null;
+
+    window.onload = function() {
+      initDarkMode();
+      fetchLoggedUser();
+      populateShiftOptions("");
+      restoreSavedData();
+      initKeyboardShortcuts();
+      startHeartbeatEngine();
+    };
+
+    function fetchLoggedUser() {
+      google.script.run
+        .withSuccessHandler(info => {
+          if (info && info.name) currentUserName = info.name;
+          if (info && info.isDeveloper) {
+            isUserDeveloper = true;
+            const liveBadge = document.getElementById("liveUsersBadge");
+            if (liveBadge) liveBadge.style.display = "inline-flex";
+            fetchLiveUsers();
+            setInterval(fetchLiveUsers, 30000);
+          }
+        })
+        .getUserInfo();
+    }
+
+    function startHeartbeatEngine() {
+      google.script.run.sendHeartbeat();
+      setInterval(() => {
+        google.script.run.sendHeartbeat();
+      }, 30000);
+    }
+
+    function fetchLiveUsers() {
+      if (!isUserDeveloper) return;
+      google.script.run
+        .withSuccessHandler(res => {
+          if (res && res.authorized) {
+            const countText = document.getElementById("liveUsersCountText");
+            if (countText) countText.textContent = `Live: ${res.count}`;
+
+            const listArea = document.getElementById("liveUsersListArea");
+            if (listArea) {
+              if (res.count === 0) {
+                listArea.innerHTML = `<div style="text-align:center; color:var(--subtext); padding:10px;">No other users active right now.</div>`;
+              } else {
+                let html = `<table style="width:100%; border-collapse:collapse; min-width:auto;">
+                  <thead>
+                    <tr style="text-align:left; color:var(--subtext); font-size:11px; border-bottom:1px solid var(--border);">
+                      <th style="padding:6px;">Name</th>
+                      <th style="padding:6px;">Email</th>
+                      <th style="padding:6px; text-align:right;">Last Seen</th>
+                    </tr>
+                  </thead>
+                  <tbody>`;
+                res.users.forEach(u => {
+                  html += `<tr style="border-bottom:1px solid var(--border);">
+                    <td style="padding:8px 6px; font-weight:700;">${escapeHtml(u.name)}</td>
+                    <td style="padding:8px 6px; color:var(--subtext);">${escapeHtml(u.email)}</td>
+                    <td style="padding:8px 6px; text-align:right; font-family:monospace; color:#16a34a;">${escapeHtml(u.timeFormatted)}</td>
+                  </tr>`;
+                });
+                html += `</tbody></table>`;
+                listArea.innerHTML = html;
+              }
+            }
+          }
+        })
+        .getLiveActiveUsers();
+    }
+
+    function openLiveUsersModal() {
+      fetchLiveUsers();
+      document.getElementById("liveUsersModal").style.display = "flex";
+    }
+    function closeLiveUsersModal() {
+      document.getElementById("liveUsersModal").style.display = "none";
+    }
+
+    function showToast(message, type) {
+      const toast = document.getElementById("toastNotification");
+      clearTimeout(toastTimer);
+
+      toast.innerHTML = message;
+      toast.className = `toast-popup show ${type === 'hii' ? 'toast-hii' : 'toast-bye'}`;
+
+      toastTimer = setTimeout(() => {
+        toast.classList.remove('show');
+      }, 5000);
+    }
+
+    function toggleToolStatus() {
+      const mainContent = document.getElementById("mainAppContent");
+      const btn = document.getElementById("toggleAppBtn");
+      const btnText = document.getElementById("btnStatusText");
+
+      if (!isAppEnabled) {
+        isAppEnabled = true;
+        mainContent.classList.remove("app-locked");
+        btn.classList.add("enabled");
+        btnText.textContent = "Bye Buddy (Click to Disable)";
+        showToast(`👋 Hii ${currentUserName}! 3D Cuboid Tool Enabled`, "hii");
+      } else {
+        isAppEnabled = false;
+        mainContent.classList.add("app-locked");
+        btn.classList.remove("enabled");
+        btnText.textContent = "Hii Buddy (Click to Enable)";
+        showToast(`👋 Bye ${currentUserName}! Tool Disabled`, "bye");
+      }
+    }
+
+    function initKeyboardShortcuts() {
+      document.addEventListener("keydown", function(e) {
+        if (!isAppEnabled) return;
+        if (e.altKey && (e.key === "a" || e.key === "A")) {
+          e.preventDefault();
+          addTask();
+          autoSave();
+          showMessage("New task added via shortcut (Alt + A)", "success");
+        }
+        if (e.ctrlKey && !e.shiftKey && e.key === "Enter") {
+          e.preventDefault();
+          generateAllocation(false);
+        }
+        if (e.ctrlKey && e.shiftKey && e.key === "Enter") {
+          e.preventDefault();
+          generateAllocation(true);
+        }
+      });
+    }
+
+    function initDarkMode() {
+      const savedTheme = localStorage.getItem("tirumala_theme");
+      if (savedTheme === "dark") {
+        document.body.classList.add("dark-mode");
+        document.getElementById("darkModeIcon").textContent = "☀";
+      }
+    }
+
+    function toggleDarkMode() {
+      const isDark = document.body.classList.toggle("dark-mode");
+      localStorage.setItem("tirumala_theme", isDark ? "dark" : "light");
+      document.getElementById("darkModeIcon").textContent = isDark ? "☀️" : "🌙";
+    }
+
+    function openFeedbackModal() { document.getElementById("feedbackModal").style.display = "flex"; }
+    function closeFeedbackModal() { document.getElementById("feedbackModal").style.display = "none"; }
+
+    function setRating(rating) {
+      selectedRating = rating;
+      const stars = document.querySelectorAll("#starContainer .star-item");
+      stars.forEach((star, idx) => star.classList.toggle("selected", idx < rating));
+    }
+
+    function submitFeedback() {
+      const name = document.getElementById("feedbackName").value.trim() || currentUserName;
+      const comments = document.getElementById("feedbackComments").value.trim();
+      const btn = document.getElementById("submitFeedbackBtn");
+
+      btn.disabled = true;
+      btn.textContent = "Sending...";
+
+      google.script.run
+        .withSuccessHandler(() => {
+          closeFeedbackModal();
+          showMessage("Thank you! Your feedback has been sent directly to Tirumala.", "success");
+        })
+        .withFailureHandler(err => {
+          btn.disabled = false;
+          btn.textContent = "Submit Feedback";
+          alert("Error sending feedback: " + err.message);
+        })
+        .submitUserFeedback({ rating: selectedRating, name, comments });
+    }
+
+    function openBulkPasteModal() {
+      document.getElementById("bulkPasteInput").value = "";
+      document.getElementById("bulkPasteModal").style.display = "flex";
+    }
+    function closeBulkPasteModal() { document.getElementById("bulkPasteModal").style.display = "none"; }
+
+    function processBulkPaste() {
+      const text = document.getElementById("bulkPasteInput").value.trim();
+      if (!text) return closeBulkPasteModal();
+
+      const lines = text.split("\n");
+      const newTasks = [];
+
+      const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+      const lsrRegex = /[0-9a-f]{24}/i;
+
+      lines.forEach(line => {
+        const row = line.trim();
+        if (!row) return;
+
+        let batchId = "", taskId = "", uniqueName = "";
+        let valSt = 0, valMt = 0, misSt = 0, misMt = 0, prSt = 0, prMt = 0, fp = 0, tc = "No";
+
+        const cols = row.includes("\t") ? row.split("\t") : row.split(",");
+
+        if (cols.length >= 4 && !row.includes("Imerit-Batch")) {
+          batchId = cols[0] ? cols[0].trim() : "";
+          taskId = cols[1] ? cols[1].trim() : "";
+          uniqueName = cols[2] ? cols[2].trim() : "";
+          valSt = Number(cols[3]) || 0;
+          valMt = Number(cols[4]) || 0;
+          misSt = Number(cols[5]) || 0;
+          misMt = Number(cols[6]) || 0;
+          prSt = Number(cols[7]) || 0;
+          prMt = Number(cols[8]) || 0;
+          fp = Number(cols[9]) || 0;
+          tc = cols[10] && cols[10].trim().toLowerCase() === "yes" ? "Yes" : "No";
+        } else {
+          const uuidMatch = row.match(uuidRegex);
+          const lsrMatch = row.match(lsrRegex);
+
+          if (uuidMatch) {
+            taskId = uuidMatch[0];
+            const uuidIndex = row.indexOf(taskId);
+            batchId = row.substring(0, uuidIndex).trim().replace(/[-_ ]+$/, "");
+            const remainingAfterUuid = row.substring(uuidIndex + taskId.length).trim();
+            uniqueName = lsrMatch ? lsrMatch[0] : (remainingAfterUuid || "");
+          } else {
+            const parts = row.split(/\s+/);
+            if (parts.length >= 3) {
+              batchId = parts[0];
+              taskId = parts[1];
+              uniqueName = parts[2];
+            } else {
+              taskId = parts[0];
+            }
+          }
+        }
+
+        if (taskId) {
+          newTasks.push({ batchId, taskId, uniqueName, valSt, valMt, misSt, misMt, prSt, prMt, fp, tc, status: (tc === "Yes" ? "Done" : "WIP") });
+        }
+      });
+
+      if (newTasks.length > 0) {
+        const existingTasks = extractCurrentTasks();
+        if (existingTasks.length === 1 && !existingTasks[0].taskId) {
+          document.getElementById("tasksContainer").innerHTML = "";
+        }
+        newTasks.forEach(task => addTask(task));
+        autoSave();
+        showMessage(`Successfully imported ${newTasks.length} tasks!`, "success");
+      }
+      closeBulkPasteModal();
+    }
+
+    function filterTableRows() {
+      const q = document.getElementById("tableSearchInput").value.toLowerCase();
+      document.querySelectorAll("#outputArea tbody tr").forEach(tr => {
+        tr.style.display = tr.innerText.toLowerCase().includes(q) ? "" : "none";
+      });
+    }
+
+    function setToday() {
+      const today = new Date();
+      document.getElementById("date").value = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    }
+
+    // ---------------------------------------------------------------------
+    // LOCATION -> SHIFT HANDLING
+    // ---------------------------------------------------------------------
+    function to12Hour(hhmm) {
+      const parts = String(hhmm).split(":").map(Number);
+      const h = parts[0], m = parts[1] || 0;
+      const suffix = h >= 12 ? "PM" : "AM";
+      const h12 = h % 12 === 0 ? 12 : h % 12;
+      return `${String(h12).padStart(2, "0")}:${String(m).padStart(2, "0")} ${suffix}`;
+    }
+
+    // Rebuilds the Shift dropdown for the chosen location.
+    // Only that location's shifts + Custom Shift are ever shown.
+    function populateShiftOptions(location, selectedShift) {
+      const select = document.getElementById("shift");
+      select.innerHTML = "";
+
+      if (!location || !LOCATION_SHIFTS[location]) {
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "Select Location first";
+        select.appendChild(opt);
+        select.disabled = true;
+        return;
+      }
+
+      select.disabled = false;
+      Object.keys(LOCATION_SHIFTS[location]).forEach(name => {
+        const s = LOCATION_SHIFTS[location][name];
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = `${name} — ${to12Hour(s.start)} to ${to12Hour(s.end)}`;
+        select.appendChild(opt);
+      });
+
+      const customOpt = document.createElement("option");
+      customOpt.value = "Custom";
+      customOpt.textContent = "Custom Shift";
+      select.appendChild(customOpt);
+
+      const wanted = selectedShift && Array.from(select.options).some(o => o.value === selectedShift)
+        ? selectedShift
+        : "Shift 1";
+      select.value = wanted;
+    }
+
+    function handleLocationChange() {
+      const location = document.getElementById("location").value;
+      populateShiftOptions(location);
+      handleShiftChange();
+    }
+
+    function handleShiftChange() {
+      const shift = document.getElementById("shift").value;
+      const isCustom = (shift === "Custom");
+      document.getElementById("customStartTimeField").style.display = isCustom ? "flex" : "none";
+      document.getElementById("customEndTimeField").style.display = isCustom ? "flex" : "none";
+      updateRefLabel();
+      autoSave();
+    }
+
+    // Shift duration comes straight from the selected production window (end - start).
+    function calculateTotalShiftSeconds() {
+      const location = document.getElementById("location").value;
+      const shift = document.getElementById("shift").value;
+
+      let startVal = null, endVal = null;
+      if (shift === "Custom") {
+        startVal = document.getElementById("customStartTime").value || "09:00";
+        endVal = document.getElementById("customEndTime").value || "17:30";
+      } else if (location && LOCATION_SHIFTS[location] && LOCATION_SHIFTS[location][shift]) {
+        startVal = LOCATION_SHIFTS[location][shift].start;
+        endVal = LOCATION_SHIFTS[location][shift].end;
+      }
+
+      if (!startVal || !endVal) return 7.5 * 60 * 60; // no location yet: display default only
+
+      const startParts = startVal.split(":").map(Number);
+      const endParts = endVal.split(":").map(Number);
+      const startSec = startParts[0] * 3600 + startParts[1] * 60;
+      let endSec = endParts[0] * 3600 + endParts[1] * 60;
+      if (endSec <= startSec) endSec += 24 * 3600;
+      return Math.max(0, endSec - startSec);
+    }
+
+    function formatHoursMinutes(totalSec) {
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.round((totalSec % 3600) / 60);
+      return m === 0 ? `${h}:00` : `${h}:${String(m).padStart(2, "0")}`;
+    }
+
+    function updateRefLabel() {
+      const selectedVal = 45;
+      const downtimeMin = Math.max(0, Number(document.getElementById("downtimeMin").value || 0));
+      const totalShiftSec = calculateTotalShiftSeconds();
+      const effectiveShiftSec = Math.max(0, totalShiftSec - (downtimeMin * 60));
+      
+      const targetCount = Math.round(effectiveShiftSec / selectedVal);
+      const targetMtCount = Math.round(effectiveShiftSec / (selectedVal * 8));
+
+      const desc = document.getElementById("reverseCalcDesc");
+      if (desc) desc.textContent = `Standard benchmark (${formatHoursMinutes(totalShiftSec)} hrs @ ${selectedVal}s ST / ${fmtMinSec(selectedVal * 8)}m MT target):`;
+
+      document.getElementById("reqStCount").textContent = `~${targetCount} items`;
+      document.getElementById("reqMtCount").textContent = `~${targetMtCount} items`;
+      document.getElementById("refSTRate").textContent = `Selected: ${selectedVal} sec / object`;
+      document.getElementById("refMTRate").textContent = `6:00 min (360 sec) / object`;
+    }
+
+    function autoSave() {
+      const state = {
+        date: document.getElementById("date").value,
+        location: document.getElementById("location").value,
+        shift: document.getElementById("shift").value,
+        customStartTime: document.getElementById("customStartTime").value,
+        customEndTime: document.getElementById("customEndTime").value,
+        downtimeMin: document.getElementById("downtimeMin").value,
+        tasks: extractCurrentTasks()
+      };
+      try {
+        localStorage.setItem("tirumala_time_alloc_state", JSON.stringify(state));
+      } catch (e) { console.error("Local storage save error", e); }
+
+      // Any input change after a run means the shared bar is out of date until the next run.
+      markBarStale();
+    }
+
+    function restoreSavedData() {
+      const raw = localStorage.getItem("tirumala_time_alloc_state");
+      if (raw) {
+        try {
+          const state = JSON.parse(raw);
+          if (state.date) document.getElementById("date").value = state.date;
+
+          // Location + dynamic shift list
+          const savedLocation = (state.location && LOCATION_SHIFTS[state.location]) ? state.location : "";
+          document.getElementById("location").value = savedLocation;
+
+          // Map old saved shift names (from previous version) to the new ones
+          let savedShift = state.shift;
+          if (savedShift === "Morning Shift") savedShift = "Shift 1";
+          else if (savedShift === "Evening Shift") savedShift = "Shift 2";
+
+          populateShiftOptions(savedLocation, savedShift);
+
+          if (state.customStartTime) document.getElementById("customStartTime").value = state.customStartTime;
+          if (state.customEndTime) document.getElementById("customEndTime").value = state.customEndTime;
+          if (state.downtimeMin) document.getElementById("downtimeMin").value = state.downtimeMin;
+
+          handleShiftChange();
+
+          if (Array.isArray(state.tasks) && state.tasks.length > 0) {
+            state.tasks.forEach(t => addTask(t));
+            return;
+          }
+        } catch (e) { console.error("Could not parse saved state", e); }
+      }
+      setToday();
+      handleShiftChange();
+      addTask();
+    }
+
+    function renumberInputTasks() {
+      const cards = document.querySelectorAll(".task-card");
+      cards.forEach((card, idx) => {
+        const num = idx + 1;
+        card.id = `task-card-${num}`;
+        const badge = card.querySelector(".task-number-badge");
+        const title = card.querySelector(".task-title");
+        if (badge) badge.textContent = num;
+        if (title) title.textContent = `Task ${num}`;
+
+        const removeBtn = card.querySelector(".task-header .danger");
+        if (cards.length === 1 && removeBtn) {
+          removeBtn.remove();
+        } else if (cards.length > 1 && !removeBtn) {
+          const header = card.querySelector(".task-header");
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "danger";
+          btn.textContent = "Remove";
+          btn.onclick = () => { removeInputTask(card); autoSave(); };
+          header.appendChild(btn);
+        }
+      });
+    }
+
+    function handleTcChange(tcSelect) {
+      const card = tcSelect.closest(".task-card");
+      const statusSelect = card.querySelector(".status");
+      if (tcSelect.value === "Yes") {
+        statusSelect.value = "Done";
+      } else if (statusSelect.value === "Done") {
+        statusSelect.value = "WIP";
+      }
+      autoSave();
+    }
+
+    function addTask(prefilled = {}) {
+      const container = document.getElementById("tasksContainer");
+      const card = document.createElement("div");
+      card.className = "task-card";
+
+      const defaultStatus = prefilled.status || (prefilled.tc === 'Yes' ? 'Done' : 'WIP');
+
+      card.innerHTML = `
+        <div class="task-header">
+          <div class="task-title-wrap">
+            <div class="task-number-badge">1</div>
+            <div class="task-title">Task 1</div>
+          </div>
+        </div>
+
+        <div class="task-meta-grid">
+          <div class="field">
+            <label>BATCH ID</label>
+            <input type="text" class="batchId" placeholder="Batch ID" value="${prefilled.batchId || ''}" oninput="autoSave()">
+          </div>
+          <div class="field">
+            <label>TASK ID (UUID)</label>
+            <input type="text" class="taskId" placeholder="Task ID" value="${prefilled.taskId || ''}" oninput="autoSave()">
+          </div>
+          <div class="field">
+            <label>UNIQUE NAME (LSR)</label>
+            <input type="text" class="uniqueName" placeholder="Unique Name" value="${prefilled.uniqueName || ''}" oninput="autoSave()">
+          </div>
+          <div class="field">
+            <label>TC</label>
+            <select class="tc" onchange="handleTcChange(this)">
+              <option value="No" ${prefilled.tc === 'No' ? 'selected' : ''}>No</option>
+              <option value="Yes" ${prefilled.tc === 'Yes' ? 'selected' : ''}>Yes</option>
+            </select>
+          </div>
+          <div class="field">
+            <label style="color: #4338ca;">STATUS</label>
+            <select class="status" onchange="autoSave()">
+              <option value="WIP" ${defaultStatus === 'WIP' ? 'selected' : ''}>WIP</option>
+              <option value="Done" ${defaultStatus === 'Done' ? 'selected' : ''}>Done</option>
+              <option value="Bad Data" ${defaultStatus === 'Bad Data' ? 'selected' : ''}>Bad Data</option>
+              <option value="Tool Crash" ${defaultStatus === 'Tool Crash' ? 'selected' : ''}>Tool Crash</option>
+              <option value="Hold" ${defaultStatus === 'Hold' ? 'selected' : ''}>Hold</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="category-counts-grid">
+          <div class="category-box">
+            <div class="category-title">Validation (Normal)</div>
+            <div class="category-inputs">
+              <div class="field" style="flex:1;">
+                <label style="font-size:9px;">ST COUNT</label>
+                <input type="number" class="valSt" value="${prefilled.valSt !== undefined ? prefilled.valSt : (prefilled.st || 0)}" min="0" onfocus="clearZero(this)" onblur="restoreZero(this); autoSave();" oninput="autoSave()">
+              </div>
+              <div class="field" style="flex:1;">
+                <label style="font-size:9px;">MT COUNT</label>
+                <input type="number" class="valMt" value="${prefilled.valMt !== undefined ? prefilled.valMt : (prefilled.mt || 0)}" min="0" onfocus="clearZero(this)" onblur="restoreZero(this); autoSave();" oninput="autoSave()">
+              </div>
+            </div>
+          </div>
+
+          <div class="category-box">
+            <div class="category-title">Missing</div>
+            <div class="category-inputs">
+              <div class="field" style="flex:1;">
+                <label style="font-size:9px;">ST COUNT</label>
+                <input type="number" class="misSt" value="${prefilled.misSt || 0}" min="0" onfocus="clearZero(this)" onblur="restoreZero(this); autoSave();" oninput="autoSave()">
+              </div>
+              <div class="field" style="flex:1;">
+                <label style="font-size:9px;">MT COUNT</label>
+                <input type="number" class="misMt" value="${prefilled.misMt || 0}" min="0" onfocus="clearZero(this)" onblur="restoreZero(this); autoSave();" oninput="autoSave()">
+              </div>
+            </div>
+          </div>
+
+          <div class="category-box">
+            <div class="category-title">Pitch & Roll</div>
+            <div class="category-inputs">
+              <div class="field" style="flex:1;">
+                <label style="font-size:9px;">ST COUNT</label>
+                <input type="number" class="prSt" value="${prefilled.prSt || 0}" min="0" onfocus="clearZero(this)" onblur="restoreZero(this); autoSave();" oninput="autoSave()">
+              </div>
+              <div class="field" style="flex:1;">
+                <label style="font-size:9px;">MT COUNT</label>
+                <input type="number" class="prMt" value="${prefilled.prMt || 0}" min="0" onfocus="clearZero(this)" onblur="restoreZero(this); autoSave();" oninput="autoSave()">
+              </div>
+              <div class="field" style="width:70px;">
+                <label style="font-size:9px;">FP COUNT</label>
+                <input type="number" class="fp" value="${prefilled.fp || 0}" min="0" onfocus="clearZero(this)" onblur="restoreZero(this); autoSave();" oninput="autoSave()">
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      container.appendChild(card);
+      renumberInputTasks();
+    }
+
+    function removeInputTask(cardElement) {
+      cardElement.remove();
+      renumberInputTasks();
+    }
+
+    function clearZero(input) { if (input.value === "0") input.value = ""; }
+    function restoreZero(input) { if (input.value.trim() === "") input.value = "0"; }
+
+    function setFormLoading(isLoading) {
+      const btn1 = document.getElementById("generateBtn");
+      const btn2 = document.getElementById("fitShiftBtn");
+      btn1.disabled = isLoading;
+      btn2.disabled = isLoading;
+      btn1.textContent = isLoading ? "Calculating..." : "Generate Allocation (Ctrl+Enter)";
+      btn2.textContent = isLoading ? "Fitting..." : "⚡ Fill Full Shift (Auto-Fit Count)";
+    }
+
+    function extractCurrentTasks() {
+      const cards = document.querySelectorAll(".task-card");
+      const tasks = [];
+      cards.forEach(card => {
+        tasks.push({
+          batchId: card.querySelector(".batchId").value.trim(),
+          taskId: card.querySelector(".taskId").value.trim(),
+          uniqueName: card.querySelector(".uniqueName").value.trim(),
+          valSt: Number(card.querySelector(".valSt").value) || 0,
+          valMt: Number(card.querySelector(".valMt").value) || 0,
+          misSt: Number(card.querySelector(".misSt").value) || 0,
+          misMt: Number(card.querySelector(".misMt").value) || 0,
+          prSt: Number(card.querySelector(".prSt").value) || 0,
+          prMt: Number(card.querySelector(".prMt").value) || 0,
+          fp: Number(card.querySelector(".fp").value) || 0,
+          tc: card.querySelector(".tc").value,
+          status: card.querySelector(".status").value
+        });
+      });
+      return tasks;
+    }
+
+    function generateAllocation(fitToShift = false) {
+      if (!isAppEnabled) {
+        return showError("Please click 'Hii Buddy' at the top right to enable the tool first.");
+      }
+
+      clearMessage();
+      lastUsedFitToShift = fitToShift;
+
+      const date = document.getElementById("date").value;
+      const location = document.getElementById("location").value;
+      const shift = document.getElementById("shift").value;
+      const customStartTime = document.getElementById("customStartTime").value;
+      const customEndTime = document.getElementById("customEndTime").value;
+      const downtimeMin = Math.max(0, Number(document.getElementById("downtimeMin").value || 0));
+
+      if (!date) return showError("Please select a date.");
+      if (!location) return showError("Please select a Location first.");
+      if (!shift) return showError("Please select a Shift.");
+
+      const tasks = extractCurrentTasks();
+      if (tasks.length === 0) return showError("Please add at least one task.");
+
+      setFormLoading(true);
+      showMessage(fitToShift ? "Auto-fitting tasks to the full selected shift..." : "Generating allocation based on target...", "success");
+
+      google.script.run
+        .withSuccessHandler(result => {
+          setFormLoading(false);
+          generatedData = result;
+
+          resetFormTracking();
+
+          renderOutput(result);
+          document.getElementById("exportCsvBtn").style.display = "inline-flex";
+          document.getElementById("copyEodBtn").style.display = "inline-flex";
+          document.getElementById("searchFilterBox").style.display = "inline-flex";
+          showMessage(fitToShift ? "Shift auto-fit completed successfully! Full shift balanced." : "Allocation generated successfully.", "success");
+        })
+        .withFailureHandler(error => {
+          setFormLoading(false);
+          showError(error.message || "Something went wrong.");
+        })
+        .generateAllocation({ date, location, shift, customStartTime, customEndTime, downtimeMin, tasks, fitToShift });
+    }
+
+    function copyText(text, btnElement) {
+      navigator.clipboard.writeText(text).then(() => {
+        const originalText = btnElement.innerHTML;
+        btnElement.innerHTML = "✓ Copied";
+        btnElement.style.color = "#16a34a";
+        setTimeout(() => {
+          btnElement.innerHTML = originalText;
+          btnElement.style.color = "";
+        }, 1500);
+      });
+    }
+
+    function exportToCsv() {
+      if (!generatedData || !generatedData.tasks) return;
+      const headers = ["Task ID", "Batch ID", "Unique Name", "Status", "Task ST Total", "Task MT Total", "Task Total Count", "Val ST", "Val MT", "Mis ST", "Mis MT", "PR ST", "PR MT", "FP", "TC"];
+      const rows = generatedData.tasks.map(t => {
+        const taskSt = (t.valSt || 0) + (t.misSt || 0) + (t.prSt || 0);
+        const taskMt = (t.valMt || 0) + (t.misMt || 0) + (t.prMt || 0);
+        const taskTotal = taskSt + (taskMt * 10); // weighted: ST + (MT x 10)
+        return [
+          `"${t.taskId || ''}"`, `"${t.batchId || ''}"`, `"${t.uniqueName || ''}"`, `"${t.status || 'WIP'}"`,
+          taskSt, taskMt, taskTotal,
+          t.valSt || 0, t.valMt || 0, t.misSt || 0, t.misMt || 0, t.prSt || 0, t.prMt || 0, t.fp || 0, `"${t.tc || 'No'}"`
+        ];
+      });
+      const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+      const link = document.createElement("a");
+      link.setAttribute("href", encodeURI(csvContent));
+      link.setAttribute("download", `Allocation_${generatedData.date || 'Shift'}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    function copyEodSummary(btnElement) {
+      if (!generatedData) return;
+      const sum = generatedData.summary;
+      const stTotal = sum.stObjects || 0;
+      const mtTotal = sum.mtObjects || 0;
+      const grandTotal = stTotal + (mtTotal * 10); // weighted: ST + (MT x 10)
+      const eodText = `*EOD Update (${generatedData.date})*\n- Location: ${generatedData.location || 'NA'}\n- Shift: ${generatedData.shiftLabel || generatedData.shift}\n- Tasks: ${generatedData.tasks.length}\n- Counts: ST: ${stTotal} | MT: ${mtTotal} (Grand Total: ${grandTotal} Count)\n- Productive Time: ${formatDuration(sum.productiveSec || 0)}\n- Actual TPST: ${formatTpst(generatedData.actualSTSec)}\n- Downtime: ${generatedData.downtimeMin || 0} mins\n- Shift Window: ${generatedData.shiftWindow}`;
+
+      navigator.clipboard.writeText(eodText).then(() => {
+        const orig = btnElement.innerHTML;
+        btnElement.innerHTML = "✓ EOD Copied!";
+        btnElement.style.color = "#16a34a";
+        setTimeout(() => { btnElement.innerHTML = orig; btnElement.style.color = ""; }, 2000);
+      });
+    }
+
+    // =========================================================================
+    // FILL FORM STATE
+    //   📝 Fill Form            -> not opened yet
+    //   ⏳ Awaiting Submission  -> form opened, waiting for a real submission
+    //   ☑ Confirm Submitted     -> (only if FORM_ID is not configured) manual confirm
+    //   Form Filled ✅          -> submission detected / confirmed
+    // Opening the form NEVER marks it as filled.
+    // =========================================================================
+    function fillBtnState(i) {
+      if (filledFormsTracker.has(i)) return { cls: "fill-form-btn form-filled", text: "Form Filled ✅" };
+      if (openedFormsTracker.has(i)) return { cls: "fill-form-btn", text: manualConfirmTracker.has(i) ? "☑ Confirm Submitted" : "⏳ Awaiting Submission" };
+      return { cls: "fill-form-btn", text: "📝 Fill Form" };
+    }
+
+    function refreshFillBtn(i) {
+      const b = document.getElementById("fillBtn-" + i);
+      if (!b) return;
+      const s = fillBtnState(i);
+      b.className = s.cls;
+      b.textContent = s.text;
+    }
+
+    function stopFormPoll(i) {
+      if (formPollTimers[i]) { clearTimeout(formPollTimers[i]); delete formPollTimers[i]; }
+    }
+
+    function markFormFilled(i) {
+      stopFormPoll(i);
+      filledFormsTracker.add(i);
+      refreshFillBtn(i);
+    }
+
+    function resetFormTracking() {
+      Object.keys(formPollTimers).forEach(k => clearTimeout(formPollTimers[k]));
+      formPollTimers = {};
+      openedFormsTracker.clear();
+      filledFormsTracker.clear();
+      manualConfirmTracker.clear();
+    }
+
+    // Polls the backend (every 5s, up to ~15 min) for a real form submission of this Task ID.
+    function startFormPoll(index, taskId, openedAt) {
+      stopFormPoll(index);
+      let tries = 0;
+      const next = () => { if (tries < 180) formPollTimers[index] = setTimeout(tick, 5000); };
+      const tick = () => {
+        tries++;
+        google.script.run
+          .withSuccessHandler(res => {
+            if (res && res.submitted) return markFormFilled(index);
+            if (res && res.configured === false) {
+              // FORM_ID not set / no access -> fall back to manual confirmation
+              stopFormPoll(index);
+              manualConfirmTracker.add(index);
+              refreshFillBtn(index);
+              return;
+            }
+            next();
+          })
+          .withFailureHandler(next)
+          .checkFormSubmitted(taskId, openedAt);
+      };
+      formPollTimers[index] = setTimeout(tick, 5000);
+    }
+
+    function openGoogleFormPrefilled(index, btnElement) {
+      if (!generatedData || !generatedData.tasks[index]) return;
+      const task = generatedData.tasks[index];
+      const date = generatedData.date;
+
+      // Manual-confirm mode: second click asks whether the form was actually submitted.
+      if (manualConfirmTracker.has(index) && !filledFormsTracker.has(index)) {
+        if (confirm("Did you submit the Google Form for this task?\nOK = Yes, submitted\nCancel = No, reopen form")) {
+          markFormFilled(index);
+          return;
+        }
+      }
+
+      // Opening the form is NOT "Form Filled". Mark as opened and wait for a real submission.
+      if (!filledFormsTracker.has(index)) {
+        openedFormsTracker.add(index);
+        refreshFillBtn(index);
+        startFormPoll(index, task.taskId, Date.now());
+      }
+
+      google.script.run.recordFormFillEvent({
+        taskId: task.taskId || "NA",
+        status: task.status || (task.tc === "Yes" ? "Done" : "WIP"),
+        location: generatedData.location || "Unknown",
+        shift: generatedData.shiftLabel || generatedData.shift || "Shift 1"
+      });
+
+      const BASE_URL = "https://docs.google.com/forms/d/e/1FAIpQLSf2J3iNWVXmKgSiRkdgr9zFEeV75chWY4MrVNqblVVfC2ll6Q/viewform";
+      const params = new URLSearchParams();
+      params.append("usp", "pp_url");
+
+      params.append("entry.2037483757", date);
+      params.append("entry.96473247", task.batchId || "NA");
+      params.append("entry.1101354465", task.taskId || "NA");
+      params.append("entry.1402621775", task.uniqueName || "NA");
+
+      // 1. Validation ST & MT
+      params.append("entry.1492205294", task.valSt > 0 ? task.valStStart : "NA");
+      params.append("entry.1993315780", task.valSt > 0 ? task.valStEnd : "NA");
+      params.append("entry.1566810393", task.valSt > 0 ? String(task.valSt) : "NA");
+
+      params.append("entry.55499823", task.valMt > 0 ? task.valMtStart : "NA");
+      params.append("entry.1779536284", task.valMt > 0 ? task.valMtEnd : "NA");
+      params.append("entry.2047164318", task.valMt > 0 ? String(task.valMt) : "NA");
+
+      // 2. Missing ST & MT
+      params.append("entry.174916379", task.misSt > 0 ? task.misStStart : "NA");
+      params.append("entry.868723538", task.misSt > 0 ? task.misStEnd : "NA");
+      params.append("entry.665719341", task.misSt > 0 ? String(task.misSt) : "NA");
+
+      params.append("entry.174796354", task.misMt > 0 ? task.misMtStart : "NA");
+      params.append("entry.2060311121", task.misMt > 0 ? task.misMtEnd : "NA");
+      params.append("entry.787793962", task.misMt > 0 ? String(task.misMt) : "NA");
+
+      // 3. Pitch & Roll ST & MT
+      params.append("entry.1343206273", task.prSt > 0 ? task.prStStart : "NA");
+      params.append("entry.1886556783", task.prSt > 0 ? task.prStEnd : "NA");
+      params.append("entry.1704769462", task.prSt > 0 ? String(task.prSt) : "NA");
+
+      params.append("entry.804506210", task.prMt > 0 ? task.prMtStart : "NA");
+      params.append("entry.2084956252", task.prMt > 0 ? task.prMtEnd : "NA");
+      params.append("entry.798422184", task.prMt > 0 ? String(task.prMt) : "NA");
+
+      // 4. Fixed FP & TC
+      if (task.fp > 0) {
+        params.append("entry.27502466", task.fpStart);
+        params.append("entry.633369550", task.fpEnd);
+        params.append("entry.748270083", String(task.fp));
+      } else {
+        params.append("entry.27502466", "NA");
+        params.append("entry.633369550", "NA");
+        params.append("entry.748270083", "NA");
+      }
+
+      if (task.tc === "Yes") {
+        params.append("entry.621082177", "Task Checking");
+        params.append("entry.1230947319", task.tcStart);
+        params.append("entry.914897774", task.tcEnd);
+        params.append("entry.1325624005", "NA");
+      } else {
+        params.append("entry.621082177", "NA");
+        params.append("entry.1230947319", "NA");
+        params.append("entry.914897774", "NA");
+        params.append("entry.1325624005", "NA");
+      }
+
+      params.append("entry.256556962", task.status || (task.tc === "Yes" ? "Done" : "WIP"));
+      window.open(`${BASE_URL}?${params.toString()}`, "_blank");
+    }
+
+    function formatTpst(sec) {
+      const val = Number(sec || 0);
+      if (val <= 0) return "0s";
+      if (val <= 60) return `${Number.isInteger(val) ? val : val.toFixed(1)}s`;
+      return `${Math.floor(val / 60)} min:${String(Math.round(val % 60)).padStart(2, '0')}s`;
+    }
+
+    // CHANGE 1 (NEW HELPER): Overall TPST display only.
+    // Whole seconds, never decimals. < 60s => "45s" | >= 60s => "m:ss min".
+    // Returns "" for invalid/empty input so the caller can fall back to "NA".
+    function formatOverallTpst(value) {
+      if (value === null || value === undefined || String(value).trim() === "") return "";
+      const n = Number(value);
+      if (!isFinite(n) || n < 0) return "";
+      const roundedSeconds = Math.round(n);
+      if (roundedSeconds < 60) return `${roundedSeconds}s`;
+      const minutes = Math.floor(roundedSeconds / 60);
+      const seconds = roundedSeconds % 60;
+      return `${minutes}:${String(seconds).padStart(2, "0")} min`;
+    }
+
+    // STRICT BENCHMARK EVALUATION (Green: ST <= 45s AND MT <= 6 min)
+    function getPerformanceStatus(stTpst, mtTpst, stObjects, mtObjects, targetST) {
+      const totalObjects = (stObjects || 0) + (mtObjects || 0);
+
+      if (totalObjects === 0) {
+        return { label: "No Activity", className: "status-gray" };
+      }
+
+      const st = Number(stTpst) || 0;
+      const mt = Number(mtTpst) || 0;
+
+      // STRICT CEILINGS:
+      const ST_GREEN_LIMIT = Number(targetST) || 45; // Default 45s
+      const ST_YELLOW_LIMIT = 60;
+      const MT_GREEN_LIMIT = 360;  // Strict 6 Minutes (360 seconds)
+      const MT_YELLOW_LIMIT = 480; // Strict 8 Minutes (480 seconds)
+
+      // 1. Red: ST > 60s OR MT > 8 mins
+      if ((stObjects > 0 && st > ST_YELLOW_LIMIT) || (mtObjects > 0 && mt > MT_YELLOW_LIMIT)) {
+        return { label: "Needs Attention", className: "status-red" };
+      }
+
+      // 2. Green: Strictly ST <= 45s AND MT <= 6 min (360s)
+      const isSTGreen = stObjects > 0 ? (st <= ST_GREEN_LIMIT) : true;
+      const isMTGreen = mtObjects > 0 ? (mt <= MT_GREEN_LIMIT) : true;
+
+      if (isSTGreen && isMTGreen) {
+        return { label: "On Track", className: "status-green" };
+      }
+
+      // 3. Yellow: Between 6 min and 8 min (e.g. 7:30 min)
+      return { label: "Close", className: "status-yellow" };
+    }
+
+    // =========================================================================
+    // SINGLE SOURCE OF TRUTH FOR STATUS
+    // Used by BOTH the top progress/status card and the TPST box.
+    // Status is rate/count based only. Workload > shift capacity (Surplus) never
+    // makes it "Needs Attention".
+    // =========================================================================
+    function computeSharedStatus(data) {
+      let st = 0, mt = 0;
+      (data.tasks || []).forEach(t => {
+        st += (t.valSt || 0) + (t.misSt || 0) + (t.prSt || 0);
+        mt += (t.valMt || 0) + (t.misMt || 0) + (t.prMt || 0);
+      });
+      return getPerformanceStatus(data.actualSTSec || 0, data.actualMTSec || 0, st, mt, data.targetSTSec);
+    }
+    const STATUS_KIND = { "status-green": "green", "status-yellow": "yellow", "status-red": "red", "status-gray": "gray" };
+
+    // =========================================================================
+    // SHARED PROGRESS BAR (targetGapCard) - ONE BAR, TWO MODES
+    //   Generate Allocation -> Shift Allocation Progress (required workload vs shift)
+    //   Fill Full Shift     -> Target-rate benchmark progress (workload vs capacity)
+    // All numbers come from data.progress returned by the backend, which reuses the
+    // backend's effective-shift / downtime / FP / TC calculation. The shift length now
+    // comes from the selected Location + Shift (or Custom).
+    // Bar color + badge always follow computeSharedStatus().
+    // =========================================================================
+    function fmtUnits(n) {
+      n = Number(n || 0);
+      return Number.isInteger(n) ? String(n) : n.toFixed(1);
+    }
+
+    function fmtMinSec(sec) {
+      sec = Math.max(0, Math.round(Number(sec || 0)));
+      return `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
+    }
+
+    function gapChip(label, value) {
+      return `<span class="gap-chip"><span class="gap-chip-label">${label}:</span> <strong>${value}</strong></span>`;
+    }
+
+    function setGapBadge(badgeEl, kind, text) {
+      const palette = {
+        blue:   { bg: "rgba(59, 130, 246, 0.15)", fg: "#2563eb", bd: "rgba(59, 130, 246, 0.3)" },
+        yellow: { bg: "rgba(245, 158, 11, 0.15)", fg: "#d97706", bd: "rgba(245, 158, 11, 0.3)" },
+        green:  { bg: "rgba(34, 197, 94, 0.15)",  fg: "#16a34a", bd: "rgba(34, 197, 94, 0.3)" },
+        red:    { bg: "rgba(239, 68, 68, 0.15)",  fg: "#b91c1c", bd: "rgba(239, 68, 68, 0.3)" },
+        gray:   { bg: "rgba(148, 163, 184, 0.2)", fg: "#64748b", bd: "rgba(148, 163, 184, 0.4)" }
+      }[kind];
+      badgeEl.style.background = palette.bg;
+      badgeEl.style.color = palette.fg;
+      badgeEl.style.border = `1px solid ${palette.bd}`;
+      badgeEl.innerText = text;
+    }
+
+    function renderSharedProgressBar(data) {
+      const gapCard = document.getElementById("targetGapCard");
+      if (!gapCard) return;
+
+      const p = data && data.progress;
+      if (!p) {
+        gapCard.style.display = "none";
+        return;
+      }
+
+      const gapTitle = document.getElementById("targetGapTitle");
+      const gapBadge = document.getElementById("targetGapBadge");
+      const gapBar = document.getElementById("targetGapBar");
+      const gapDetails = document.getElementById("targetGapDetails");
+
+      gapCard.style.display = "block";
+      hideStaleHint();
+
+      const BAR_COLORS = { blue: "#3b82f6", yellow: "#eab308", green: "#22c55e", red: "#ef4444", gray: "#94a3b8" };
+
+      // ONE status for the whole screen (same one used in the TPST box)
+      const status = computeSharedStatus(data);
+      const statusKind = STATUS_KIND[status.className] || "gray";
+
+      if (p.mode === "autofit") {
+        // ---------- AUTO-FIT MODE: workload vs benchmark capacity at target ST rate ----------
+        const target = p.targetSTSec;
+        const rate = p.currentSTRate;
+        const gap = p.stGapSec;
+        const rawPct = Math.max(0, p.benchmarkPct);
+        const barPct = Math.min(100, rawPct);
+        const atOrBelowTarget = gap <= 0.05;
+        const gapText = `${gap >= 0 ? "+" : "-"}${Math.abs(gap).toFixed(1)} sec`;
+
+        gapBar.style.width = `${barPct}%`;
+        gapBar.style.background = BAR_COLORS[statusKind];
+        gapTitle.innerHTML = `${atOrBelowTarget ? "✨" : "⚠️"} ${target}s Target Progress — <strong>${rawPct.toFixed(1)}%</strong>`;
+        setGapBadge(gapBadge, statusKind, `${status.label} • ` + (atOrBelowTarget ? `At/below target (${gapText})` : `Gap ${gapText}`));
+
+        let capacityLine;
+        if (p.additionalUnits > 0) {
+          capacityLine = `
+            <div style="margin-top:4px;">
+              🎯 <strong>Additional target-rate workload capacity:</strong>
+              <span style="color:#2563eb; font-weight:700;">+${p.additionalUnits} ST-equivalent units</span>
+              (≈ <span style="color:#2563eb; font-weight:700;">+${p.additionalUnits} ST</span> <i>or</i>
+              <span style="color:#7c3aed; font-weight:700;">+${p.additionalMT} MT</span> at ${target}s ST / ${fmtMinSec(p.targetMTSec)} MT)
+            </div>
+            <div class="gap-note">This is how much more work fits at the target rate. It does not change the current average rate.</div>`;
+        } else {
+          capacityLine = `
+            <div style="margin-top:4px;">✅ <strong>Workload is at or above benchmark capacity</strong> — no additional target-rate capacity left in this shift.</div>`;
+        }
+
+        gapDetails.innerHTML = `
+          <div class="gap-chips">
+            ${gapChip("Current ST Rate", `${rate.toFixed(1)} sec`)}
+            ${gapChip("Target", `${target} sec`)}
+            ${gapChip("Gap", gapText)}
+            ${gapChip("Current workload", `${fmtUnits(p.currentWorkloadUnits)} units`)}
+            ${gapChip("Benchmark capacity", `${fmtUnits(p.benchmarkCapacityUnits)} units`)}
+          </div>
+          ${capacityLine}
+          <div class="gap-note">Units are ST-equivalent (1 MT = ${fmtUnits(p.benchmarkRatio)} ST). Capacity = productive time after downtime (${formatDuration(p.downtimeSec)}) and FP/TC (${formatDuration(p.fixedNonProductiveSec)}) ÷ ${target}s.</div>
+        `;
+      } else {
+        // ---------- GENERATE MODE: required workload vs effective shift ----------
+        const pct = Math.max(0, p.fillPct);
+        const barPct = Math.min(100, pct);
+        const hasSurplus = p.overSec > 0;
+        const pctText = (pct >= 99.95 && pct < 100.05) ? "100.0" : pct.toFixed(1);
+
+        gapBar.style.width = `${barPct}%`;
+        gapBar.style.background = BAR_COLORS[statusKind];
+        gapTitle.innerHTML = `${hasSurplus ? "📈" : "📊"} Shift Allocation Progress — <strong>${pctText}% FILLED</strong>`;
+        setGapBadge(gapBadge, statusKind, hasSurplus
+          ? `${status.label} • Surplus ${formatDuration(p.overSec)}`
+          : `${status.label} • Remaining ${formatDuration(p.remainingSec)}`);
+
+        gapDetails.innerHTML = `
+          <div class="gap-chips">
+            ${gapChip("Required Workload", formatDuration(p.requiredSec))}
+            ${gapChip("Available", formatDuration(p.effectiveSec))}
+            ${hasSurplus ? gapChip("Surplus", formatDuration(p.overSec)) : gapChip("Remaining to fill", formatDuration(p.remainingSec))}
+            ${gapChip("Target", `${p.targetSTSec} sec/ST`)}
+            ${gapChip("MT Target", `${fmtMinSec(p.targetMTSec)} min`)}
+            ${gapChip("Downtime removed", formatDuration(p.downtimeSec))}
+          </div>
+        `;
+      }
+    }
+
+    function markBarStale() {
+      if (!generatedData) return;
+      const el = document.getElementById("targetGapStale");
+      const card = document.getElementById("targetGapCard");
+      if (el && card && card.style.display !== "none") el.style.display = "block";
+    }
+
+    function hideStaleHint() {
+      const el = document.getElementById("targetGapStale");
+      if (el) el.style.display = "none";
+    }
+
+    function renderOutput(data) {
+      const output = document.getElementById("outputArea");
+      const summary = document.getElementById("summary");
+      const legendBar = document.getElementById("legendBar");
+      const subtitle = document.getElementById("outputSubtitle");
+      const shiftPill = document.getElementById("shiftPill");
+      const varianceBox = document.getElementById("varianceAlert");
+      const varianceMsg = document.getElementById("varianceMessage");
+
+      if (!data || !data.tasks) {
+        summary.style.display = "none";
+        legendBar.style.display = "none";
+        shiftPill.style.display = "none";
+        varianceBox.style.display = "none";
+        document.getElementById("targetGapCard").style.display = "none";
+        output.innerHTML = `<div class="empty-output"><div class="empty-output-title">No allocation generated</div>Enter your task details and generate allocation.</div>`;
+        return;
+      }
+
+      const modeText = data.fitToShift ? "Auto-Fit Mode" : `Target ST: ${data.targetSTSec}s`;
+      const downtimeText = data.downtimeMin > 0 ? ` • Downtime: ${data.downtimeMin}m` : "";
+      const locationText = data.location ? ` • ${data.location}` : "";
+      subtitle.textContent = `${data.date}${locationText} • Window: ${data.shiftWindow} • ${modeText}${downtimeText}`;
+      shiftPill.textContent = data.shiftLabel || data.shift;
+      shiftPill.style.display = "block";
+      summary.style.display = "grid";
+      legendBar.style.display = "flex";
+
+      const actualST = data.actualSTSec || 0;
+      const totalObj = (data.summary.stObjects || 0) + ((data.summary.mtObjects || 0) * 10); // weighted count
+
+      if (actualST > 60 && totalObj > 0) {
+        varianceBox.style.display = "flex";
+        varianceMsg.textContent = `Actual TPST (${formatTpst(actualST)}) exceeded target because total count (${totalObj}) is low for the ${formatHoursMinutes(data.summary.availableSec)}h shift workload.`;
+      } else {
+        varianceBox.style.display = "none";
+      }
+
+      updateSummary();
+
+      // Shared bar: mode (Generate vs Auto-Fit) comes from the backend result.
+      renderSharedProgressBar(data);
+
+      if (data.tasks.length === 0) {
+        output.innerHTML = `<div class="empty-output"><div class="empty-output-title">No tasks remaining</div>All tasks removed.</div>`;
+        return;
+      }
+
+      let html = `
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Task</th>
+                <th>Status</th>
+                <th>Task Counts</th>
+                <th>Validation (ST / MT)</th>
+                <th>Missing (ST / MT)</th>
+                <th>Pitch & Roll (ST / MT)</th>
+                <th>FP</th>
+                <th>TC</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+      `;
+
+      data.tasks.forEach((task, index) => {
+        const renderSubStage = (label, count, start, end, sec) => {
+          if (count <= 0) return `<div style="font-size:10px; color:#94a3b8;">${label}: 0</div>`;
+          return `
+            <div style="margin-bottom: 4px;">
+              <span style="font-weight:700; color:var(--text);">${label}: ${count}</span> 
+              <span class="allocation-time">(${formatDuration(sec)})</span>
+              <div class="timing-stack">
+                <span class="time-item">${start} <button type="button" class="copy-btn" onclick="copyText('${start}', this)">📋</button></span>
+                <span class="time-item">${end} <button type="button" class="copy-btn" onclick="copyText('${end}', this)">📋</button></span>
+              </div>
+            </div>
+          `;
+        };
+
+        const getStatusBadge = (st) => {
+          let cls = "status-wip";
+          if (st === "Done") cls = "status-done";
+          else if (st === "Bad Data") cls = "status-baddata";
+          else if (st === "Tool Crash") cls = "status-crash";
+          else if (st === "Hold") cls = "status-hold";
+          return `<span class="task-status-badge ${cls}">${escapeHtml(st)}</span>`;
+        };
+
+        const fb = fillBtnState(index);
+        const fillBtnClass = fb.cls;
+        const fillBtnText = fb.text;
+
+        const taskStTotal = (task.valSt || 0) + (task.misSt || 0) + (task.prSt || 0);
+        const taskMtTotal = (task.valMt || 0) + (task.misMt || 0) + (task.prMt || 0);
+        const taskGrandTotal = taskStTotal + (taskMtTotal * 10); // weighted: ST + (MT x 10)
+
+        html += `
+          <tr>
+            <td class="task-id-cell">
+              <span class="task-number">TASK ${index + 1}</span>
+              ${escapeHtml(task.taskId)}
+              ${task.batchId ? `<div style="font-size:10px; color:var(--subtext);">B: ${escapeHtml(task.batchId)}</div>` : ''}
+            </td>
+            <td>${getStatusBadge(task.status || (task.tc === "Yes" ? "Done" : "WIP"))}</td>
+            
+            <td>
+              <div class="task-counts-card">
+                <div class="sub-count"><span>ST Count:</span> <strong>${taskStTotal}</strong></div>
+                <div class="sub-count"><span>MT Count:</span> <strong>${taskMtTotal}</strong></div>
+                <div class="total-count-badge"><span>Task Total:</span> <strong>${taskGrandTotal}</strong></div>
+              </div>
+            </td>
+
+            <td>
+              ${renderSubStage("ST", task.valSt, task.valStStart, task.valStEnd, task.valStSec)}
+              ${renderSubStage("MT", task.valMt, task.valMtStart, task.valMtEnd, task.valMtSec)}
+            </td>
+
+            <td>
+              ${renderSubStage("ST", task.misSt, task.misStStart, task.misStEnd, task.misStSec)}
+              ${renderSubStage("MT", task.misMt, task.misMtStart, task.misMtEnd, task.misMtSec)}
+            </td>
+
+            <td>
+              ${renderSubStage("ST", task.prSt, task.prStStart, task.prStEnd, task.prStSec)}
+              ${renderSubStage("MT", task.prMt, task.prMtStart, task.prMtEnd, task.prMtSec)}
+            </td>
+
+            <td>
+              ${task.fp > 0 ? `
+                <div class="task-counts-card" style="min-width:70px; text-align:center;">
+                  <strong>${task.fp}</strong>
+                </div>
+                <div class="timing-stack">
+                  <span class="time-item">${task.fpStart}</span>
+                  <span class="time-item">${task.fpEnd}</span>
+                </div>
+              ` : '<span style="color:#94a3b8;">0</span>'}
+            </td>
+
+            <td>
+              <span class="${task.tc === 'Yes' ? 'tc-yes' : 'tc-no'}">${task.tc}</span>
+              ${task.tc === 'Yes' ? `
+                <div class="timing-stack">
+                  <span class="time-item">${task.tcStart}</span>
+                  <span class="time-item">${task.tcEnd}</span>
+                </div>
+              ` : ''}
+            </td>
+
+            <td>
+              <div style="display:flex; gap:6px; align-items:center;">
+                <button type="button" id="fillBtn-${index}" class="${fillBtnClass}" onclick="openGoogleFormPrefilled(${index}, this)">${fillBtnText}</button>
+                <button type="button" class="output-remove" onclick="openDeleteModal(${index})">Remove</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      });
+
+      html += `</tbody></table></div>`;
+      output.innerHTML = html;
+    }
+
+    function updateSummary() {
+      if (!generatedData) return;
+      const sum = generatedData.summary;
+      const productive = sum.productiveSec || 0;
+      const nonProductive = sum.nonProductiveSec || 0;
+      const downtimeSec = sum.downtimeSec || 0;
+      const total = sum.totalSec || (productive + nonProductive);
+      const available = sum.availableSec || 0;
+      const remaining = sum.remainingSec !== undefined ? sum.remainingSec : Math.max(0, available - total);
+      const surplus = sum.overSec || 0;
+      const requiredWorkload = sum.requiredSec || total;
+
+      let valStTotal = 0, valMtTotal = 0;
+      let misStTotal = 0, misMtTotal = 0;
+      let prStTotal = 0, prMtTotal = 0;
+
+      generatedData.tasks.forEach(t => {
+        valStTotal += Number(t.valSt || 0);
+        valMtTotal += Number(t.valMt || 0);
+        misStTotal += Number(t.misSt || 0);
+        misMtTotal += Number(t.misMt || 0);
+        prStTotal += Number(t.prSt || 0);
+        prMtTotal += Number(t.prMt || 0);
+      });
+
+      const stObjects = valStTotal + misStTotal + prStTotal;
+      const mtObjects = valMtTotal + misMtTotal + prMtTotal;
+      const grandTotalObjects = stObjects + (mtObjects * 10); // weighted: ST + (MT x 10)
+
+      const totalFP = generatedData.tasks.reduce((acc, t) => acc + Number(t.fp || 0), 0);
+      const totalTC = generatedData.tasks.filter(t => t.tc === "Yes").length;
+
+      const stSec = generatedData.actualSTSec || 0;
+      const mtSec = generatedData.actualMTSec || 0;
+      
+      // SAME status calculation as the top progress card
+      const statusInfo = computeSharedStatus(generatedData);
+
+      // UPDATE 2: label only (no calculation change)
+      // Generate Allocation -> "Allocation TPST" | Fill Full Shift -> "Auto-Fit TPST"
+      document.getElementById("tpstLabel").textContent = generatedData.fitToShift ? "Auto-Fit TPST" : "Allocation TPST";
+
+      document.getElementById("productiveValue").textContent = formatDuration(productive);
+      document.getElementById("nonProductiveValue").innerHTML = downtimeSec > 0 ? 
+        `<span>${formatDuration(nonProductive)}</span><span style="font-size:10px; color:#ea580c; font-weight:700;">(+${Math.round(downtimeSec/60)}m DT)</span>` : 
+        formatDuration(nonProductive);
+
+      document.getElementById("totalValue").innerHTML = surplus > 0
+        ? `<span>${formatDuration(total)}</span><span style="font-size:10px; color:var(--subtext); font-weight:600;">Required: ${formatDuration(requiredWorkload)}</span>`
+        : formatDuration(total);
+      document.getElementById("availableValue").textContent = formatDuration(available);
+
+      const remainingLabelEl = document.getElementById("remainingLabel");
+      if (surplus > 0) {
+        // Workload exceeds the shift: show Surplus (never "Over Capacity")
+        if (remainingLabelEl) remainingLabelEl.textContent = "Surplus";
+        document.getElementById("remainingValue").innerHTML = `
+          <span style="color:#ea580c;">${formatDuration(surplus)}</span>
+          <span style="font-size:10px; color:#ea580c; font-weight:700;">Surplus</span>
+        `;
+      } else {
+        if (remainingLabelEl) remainingLabelEl.textContent = "Remaining";
+        const remainingSuggestedCount = remaining > 0 ? Math.round(remaining / (Number(generatedData.targetSTSec) || 45)) : 0;
+        document.getElementById("remainingValue").innerHTML = `
+          <span>${formatDuration(remaining)}</span>
+          ${remaining > 0 ? `<span style="font-size:10px; color:#4338ca; font-weight:700; background:#e0e7ff; padding:2px 6px; border-radius:4px; margin-top:2px;">~${remainingSuggestedCount} left</span>` : '<span style="font-size:10px; color:#16a34a; font-weight:700;">Shift Full</span>'}
+        `;
+      }
+
+      document.getElementById("totalCountsValue").innerHTML = `
+        <div style="font-size: 10px; line-height: 1.35; margin-bottom: 3px; border-bottom: 1px dashed var(--border); padding-bottom: 3px;">
+          <div><strong style="color:var(--text);">Val:</strong> ST: ${valStTotal} | MT: ${valMtTotal}</div>
+          <div><strong style="color:var(--text);">Mis:</strong> ST: ${misStTotal} | MT: ${misMtTotal}</div>
+          <div><strong style="color:var(--text);">P&R:</strong> ST: ${prStTotal} | MT: ${prMtTotal}</div>
+        </div>
+        <div style="font-size: 11px; font-weight: 750; color: #2563eb;">
+          Total ST: ${stObjects} | Total MT: ${mtObjects}
+        </div>
+        <div style="font-size: 12px; color: #15803d; font-weight: 800; margin: 2px 0;">
+          Grand Total: ${grandTotalObjects} Count
+        </div>
+        <div style="color: var(--subtext); font-size: 9px;">
+          FP: ${totalFP} | TC: ${totalTC}
+        </div>
+      `;
+
+      let tpstDisplay = "";
+      if (stObjects > 0 && mtObjects > 0) tpstDisplay = `ST: ${formatTpst(stSec)} | MT: ${formatDuration(mtSec)}`;
+      else if (stObjects > 0) tpstDisplay = `ST: ${formatTpst(stSec)}`;
+      else if (mtObjects > 0) tpstDisplay = `MT: ${formatDuration(mtSec)}`;
+      else tpstDisplay = "NA";
+
+      document.getElementById("tpstValue").innerHTML = `
+        <span>${tpstDisplay}</span>
+        ${grandTotalObjects > 0 ? `<span class="status-badge ${statusInfo.className}" style="margin-left:4px;">${statusInfo.label}</span>` : ''}
+      `;
+
+      // 10:1 Ratio for Overall TPST (1 MT = 10 ST)
+      const equivalentSTUnits = stObjects + (mtObjects * 10);
+      const overallTpstSec = equivalentSTUnits > 0 ? (productive / equivalentSTUnits) : 0;
+      // CHANGE 2: Overall TPST display only: rounded to nearest whole second, then s or m:ss format
+      const overallTpstText = formatOverallTpst(overallTpstSec);
+      document.getElementById("overallTpstValue").textContent = (equivalentSTUnits > 0 && overallTpstText) ? `${overallTpstText} / count` : "NA";
+    }
+
+    function openResetModal() { document.getElementById("resetModal").style.display = "flex"; }
+    function closeResetModal() { document.getElementById("resetModal").style.display = "none"; }
+
+    function confirmReset() {
+      closeResetModal();
+      localStorage.removeItem("tirumala_time_alloc_state");
+      resetFormTracking();
+      setToday();
+      document.getElementById("location").value = "";
+      populateShiftOptions("");
+      document.getElementById("customStartTime").value = "09:00";
+      document.getElementById("customEndTime").value = "17:30";
+      handleShiftChange();
+      document.getElementById("downtimeMin").value = "";
+      updateRefLabel();
+      document.getElementById("tasksContainer").innerHTML = "";
+      generatedData = null;
+      deleteIndex = null;
+      lastUsedFitToShift = false;
+      document.getElementById("summary").style.display = "none";
+      document.getElementById("legendBar").style.display = "none";
+      document.getElementById("shiftPill").style.display = "none";
+      document.getElementById("exportCsvBtn").style.display = "none";
+      document.getElementById("copyEodBtn").style.display = "none";
+      document.getElementById("searchFilterBox").style.display = "none";
+      document.getElementById("varianceAlert").style.display = "none";
+      document.getElementById("targetGapCard").style.display = "none";
+      hideStaleHint();
+      document.getElementById("outputSubtitle").textContent = "Generate an allocation to view task timings.";
+      document.getElementById("outputArea").innerHTML = `<div class="empty-output"><div class="empty-output-title">No allocation generated</div>Enter your task details and generate allocation.</div>`;
+      clearMessage();
+      addTask();
+      showMessage("All data has been reset successfully.", "success");
+    }
+
+    function openDeleteModal(index) {
+      deleteIndex = index;
+      document.getElementById("deleteModal").style.display = "flex";
+    }
+    function closeDeleteModal() { deleteIndex = null; document.getElementById("deleteModal").style.display = "none"; }
+
+    function confirmDelete() {
+      if (deleteIndex === null) return closeDeleteModal();
+
+      const cards = document.querySelectorAll(".task-card");
+      if (cards && cards[deleteIndex]) {
+        cards[deleteIndex].remove();
+        renumberInputTasks();
+        autoSave();
+      }
+
+      closeDeleteModal();
+
+      const remainingCards = document.querySelectorAll(".task-card");
+      if (remainingCards.length === 0) {
+        generatedData = null;
+        renderOutput(null);
+        addTask();
+        showMessage("Task removed. All tasks cleared.", "success");
+        return;
+      }
+
+      showMessage("Task removed. Re-allocating timings...", "success");
+      generateAllocation(lastUsedFitToShift);
+    }
+
+    function showMessage(msg, type) {
+      const el = document.getElementById("message");
+      el.textContent = msg;
+      el.className = `message ${type}`;
+    }
+    function showError(msg) { showMessage(msg, "error"); }
+    function clearMessage() {
+      const el = document.getElementById("message");
+      el.textContent = "";
+      el.className = "message";
+    }
+
+    function formatDuration(sec) {
+      sec = Math.max(0, Number(sec || 0));
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = Math.floor(sec % 60);
+      return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+    }
+
+    function escapeHtml(val) {
+      return String(val).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+
+    // =========================================================================
+    // PRODUCTION REFERENCE CALCULATOR (NEW, ISOLATED)
+    // - Every function / constant / variable here starts with refCalc_
+    // - Reads ONLY the refCalc_* elements; never touches main-app IDs, globals,
+    //   localStorage or backend. No google.script.run calls.
+    // - Benchmarks below are private to this calculator (NOT the main CONFIG).
+    // =========================================================================
+    const refCalc_LOCATION_DEFAULTS = {
+      "Hyderabad": "07:30:00",
+      "Saltlake":  "08:00:00",
+      "Metiabrux": "07:30:00"
+    };
+    const refCalc_BENCHMARK_ST_SEC = 45;   // 45 sec per count
+    const refCalc_BENCHMARK_MT_SEC = 360;  // 6 min per count
+
+    function refCalc_el(id) { return document.getElementById(id); }
+
+    // Parses "HH:MM:SS" (also accepts "HH:MM"). Returns total seconds, or null if invalid.
+    function refCalc_parseTime(str) {
+      const m = String(str || "").trim().match(/^(\d+):(\d{1,2})(?::(\d{1,2}))?$/);
+      if (!m) return null;
+      const h = Number(m[1]), mi = Number(m[2]), s = m[3] === undefined ? 0 : Number(m[3]);
+      if (mi > 59 || s > 59) return null;
+      return h * 3600 + mi * 60 + s;
+    }
+
+    // Formats seconds (rounded to the nearest whole second) as HH:MM:SS
+    function refCalc_formatTime(sec) {
+      sec = Math.max(0, Math.round(Number(sec) || 0));
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = sec % 60;
+      return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+    }
+
+    // Accepts "HH:MM:SS", "MM:SS" or plain seconds for the optional status check input.
+    function refCalc_parseFlexible(str) {
+      const t = String(str || "").trim();
+      if (!t) return null;
+      if (/^\d+(\.\d+)?$/.test(t)) return Number(t);
+      const parts = t.split(":");
+      if (parts.some(p => !/^\d+(\.\d+)?$/.test(p))) return NaN;
+      if (parts.length === 2) return Number(parts[0]) * 60 + Number(parts[1]);
+      if (parts.length === 3) return Number(parts[0]) * 3600 + Number(parts[1]) * 60 + Number(parts[2]);
+      return NaN;
+    }
+
+    function refCalc_showMessage(msg) {
+      const box = refCalc_el("refCalc_message");
+      if (!box) return;
+      if (msg) {
+        box.textContent = msg;
+        box.classList.add("refCalc_show");
+      } else {
+        box.textContent = "";
+        box.classList.remove("refCalc_show");
+      }
+    }
+
+    // Standard Mode status reference (display only). Calculator-specific; independent of the main app.
+    // type: "ST" | "MT", sec: actual TPST in seconds (null/NaN => gray)
+    function refCalc_getStandardStatus(type, sec) {
+      if (sec === null || sec === undefined || isNaN(sec) || sec <= 0) {
+        return { label: "No Activity", cls: "refCalc_gray" };
+      }
+      const green = type === "ST" ? 45 : 360;
+      const yellow = type === "ST" ? 60 : 480;
+      if (sec <= green)  return { label: "On Track", cls: "refCalc_green" };
+      if (sec <= yellow) return { label: "Close", cls: "refCalc_yellow" };
+      return { label: "Needs Attention", cls: "refCalc_red" };
+    }
+
+    // Expected count = working seconds / benchmark TPST, rounded to a whole number
+    function refCalc_calculateStandard(workingSec) {
+      return {
+        stCount: Math.round(workingSec / refCalc_BENCHMARK_ST_SEC),
+        mtCount: Math.round(workingSec / refCalc_BENCHMARK_MT_SEC)
+      };
+    }
+
+    // Actual TPST (seconds) = working seconds / count. Returns null when count <= 0.
+    function refCalc_calculateNormal(workingSec, count) {
+      if (!Number.isInteger(count) || count <= 0) return null;
+      return workingSec / count;
+    }
+
+    function refCalc_renderStandard(workingSec) {
+      const r = refCalc_calculateStandard(workingSec);
+      const stStatus = refCalc_getStandardStatus("ST", refCalc_parseFlexible(refCalc_el("refCalc_checkST") ? refCalc_el("refCalc_checkST").value : ""));
+      const mtStatus = refCalc_getStandardStatus("MT", refCalc_parseFlexible(refCalc_el("refCalc_checkMT") ? refCalc_el("refCalc_checkMT").value : ""));
+      return `
+        <div class="refCalc_tableWrap">
+          <table class="refCalc_table">
+            <thead>
+              <tr><th>Type</th><th>TPST</th><th>Expected Count</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>ST</strong></td>
+                <td class="refCalc_mono">${refCalc_formatTime(refCalc_BENCHMARK_ST_SEC)}</td>
+                <td class="refCalc_big">${r.stCount}</td>
+              </tr>
+              <tr>
+                <td><strong>MT</strong></td>
+                <td class="refCalc_mono">${refCalc_formatTime(refCalc_BENCHMARK_MT_SEC)}</td>
+                <td class="refCalc_big">${r.mtCount}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="refCalc_tableWrap">
+          <table class="refCalc_table">
+            <thead>
+              <tr><th>Status Reference</th><th>Green / On Track</th><th>Yellow / Close</th><th>Red / Needs Attention</th><th>Check Actual TPST (optional)</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>ST</strong></td>
+                <td>&le; 00:00:45</td>
+                <td>&gt; 00:00:45 to &le; 00:01:00</td>
+                <td>&gt; 00:01:00</td>
+                <td><input type="text" id="refCalc_checkST" class="refCalc_checkInput" placeholder="e.g. 50 or 00:50" autocomplete="off"></td>
+                <td><span id="refCalc_statusST" class="refCalc_badge ${stStatus.cls}">${stStatus.label}</span></td>
+              </tr>
+              <tr>
+                <td><strong>MT</strong></td>
+                <td>&le; 00:06:00</td>
+                <td>&gt; 00:06:00 to &le; 00:08:00</td>
+                <td>&gt; 00:08:00</td>
+                <td><input type="text" id="refCalc_checkMT" class="refCalc_checkInput" placeholder="e.g. 07:30" autocomplete="off"></td>
+                <td><span id="refCalc_statusMT" class="refCalc_badge ${mtStatus.cls}">${mtStatus.label}</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="refCalc_note">Status is a display-only reference. Enter seconds, MM:SS or HH:MM:SS to check an actual TPST.</div>
+      `;
+    }
+
+    function refCalc_renderNormal(workingSec, count) {
+      const tpstSec = refCalc_calculateNormal(workingSec, count);
+      const tpstText = tpstSec === null ? "--" : refCalc_formatTime(tpstSec);
+      const countText = (Number.isInteger(count) && count > 0) ? String(count) : "--";
+      return `
+        <div class="refCalc_tableWrap">
+          <table class="refCalc_table">
+            <thead>
+              <tr><th>Working Time</th><th>Count</th><th>Actual TPST</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="refCalc_mono">${refCalc_formatTime(workingSec)}</td>
+                <td class="refCalc_mono">${countText}</td>
+                <td class="refCalc_big">${tpstText}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    // Live update: validates inputs, then renders the table for the selected mode.
+    function refCalc_update() {
+      const result = refCalc_el("refCalc_result");
+      if (!result) return;
+
+      const mode = refCalc_el("refCalc_mode").value;
+      refCalc_el("refCalc_countField").style.display = (mode === "normal") ? "flex" : "none";
+
+      const workingSec = refCalc_parseTime(refCalc_el("refCalc_workingTime").value);
+      if (workingSec === null) {
+        refCalc_showMessage("Enter Working Time as HH:MM:SS (minutes and seconds 00-59).");
+        result.innerHTML = "";
+        return;
+      }
+      if (workingSec <= 0) {
+        refCalc_showMessage("Working Time must be greater than 00:00:00.");
+        result.innerHTML = "";
+        return;
+      }
+
+      if (mode === "normal") {
+        const rawCount = refCalc_el("refCalc_count").value.trim();
+        const count = rawCount === "" ? NaN : Number(rawCount);
+        if (rawCount === "") {
+          refCalc_showMessage("");
+        } else if (!Number.isInteger(count) || count <= 0) {
+          refCalc_showMessage("Count must be a whole number greater than 0.");
+        } else {
+          refCalc_showMessage("");
+        }
+        result.innerHTML = refCalc_renderNormal(workingSec, count);
+      } else {
+        refCalc_showMessage("");
+        // Preserve whatever the user typed in the optional status-check boxes across re-renders.
+        const prevST = refCalc_el("refCalc_checkST") ? refCalc_el("refCalc_checkST").value : "";
+        const prevMT = refCalc_el("refCalc_checkMT") ? refCalc_el("refCalc_checkMT").value : "";
+        result.innerHTML = refCalc_renderStandard(workingSec);
+        refCalc_el("refCalc_checkST").value = prevST;
+        refCalc_el("refCalc_checkMT").value = prevMT;
+        refCalc_updateStatusOnly();
+        refCalc_el("refCalc_checkST").addEventListener("input", refCalc_updateStatusOnly);
+        refCalc_el("refCalc_checkMT").addEventListener("input", refCalc_updateStatusOnly);
+      }
+    }
+
+    // Updates only the two status badges (keeps focus in the text box while typing).
+    function refCalc_updateStatusOnly() {
+      const stBadge = refCalc_el("refCalc_statusST");
+      const mtBadge = refCalc_el("refCalc_statusMT");
+      if (!stBadge || !mtBadge) return;
+      const st = refCalc_getStandardStatus("ST", refCalc_parseFlexible(refCalc_el("refCalc_checkST").value));
+      const mt = refCalc_getStandardStatus("MT", refCalc_parseFlexible(refCalc_el("refCalc_checkMT").value));
+      stBadge.className = "refCalc_badge " + st.cls;
+      stBadge.textContent = st.label;
+      mtBadge.className = "refCalc_badge " + mt.cls;
+      mtBadge.textContent = mt.label;
+    }
+
+    // Loads the calculator's own default working time for the selected calculator location.
+    function refCalc_onLocationChange() {
+      const loc = refCalc_el("refCalc_location").value;
+      if (refCalc_LOCATION_DEFAULTS[loc]) {
+        refCalc_el("refCalc_workingTime").value = refCalc_LOCATION_DEFAULTS[loc];
+      }
+      refCalc_update();
+    }
+
+    // Count: whole numbers only. Strips anything that is not a digit (blocks ".", "-", "e", etc.).
+    function refCalc_onCountInput() {
+      const input = refCalc_el("refCalc_count");
+      const cleaned = input.value.replace(/\D/g, "");
+      if (cleaned !== input.value) {
+        input.value = cleaned;
+        refCalc_showMessage("Count accepts whole numbers only (no decimals).");
+        // keep the live result in sync without clearing that message
+        const workingSec = refCalc_parseTime(refCalc_el("refCalc_workingTime").value);
+        if (workingSec !== null && workingSec > 0) {
+          const c = cleaned === "" ? NaN : Number(cleaned);
+          refCalc_el("refCalc_result").innerHTML = refCalc_renderNormal(workingSec, c);
+        }
+        return;
+      }
+      refCalc_update();
+    }
+
+    function refCalc_onCountKeydown(e) {
+      if (e.key === "." || e.key === "," || e.key === "-" || e.key === "+" || e.key === "e" || e.key === "E") {
+        e.preventDefault();
+        refCalc_showMessage("Count accepts whole numbers only (no decimals).");
+      }
+    }
+
+    // Tidy the time display (e.g. "7:30" -> "07:30:00") once the user leaves the field.
+    function refCalc_onTimeBlur() {
+      const sec = refCalc_parseTime(refCalc_el("refCalc_workingTime").value);
+      if (sec !== null && sec > 0) {
+        refCalc_el("refCalc_workingTime").value = refCalc_formatTime(sec);
+      }
+      refCalc_update();
+    }
+
+    function refCalc_initialize() {
+      try {
+        if (!refCalc_el("refCalc_container")) return;
+        refCalc_el("refCalc_location").addEventListener("change", refCalc_onLocationChange);
+        refCalc_el("refCalc_mode").addEventListener("change", refCalc_update);
+        refCalc_el("refCalc_workingTime").addEventListener("input", refCalc_update);
+        refCalc_el("refCalc_workingTime").addEventListener("blur", refCalc_onTimeBlur);
+        refCalc_el("refCalc_count").addEventListener("input", refCalc_onCountInput);
+        refCalc_el("refCalc_count").addEventListener("keydown", refCalc_onCountKeydown);
+        refCalc_el("refCalc_count").addEventListener("paste", function() { setTimeout(refCalc_onCountInput, 0); });
+        refCalc_onLocationChange(); // loads Hyderabad default (07:30:00) and renders
+      } catch (e) {
+        console.error("refCalc_initialize error", e);
+      }
+    }
+
+    // Runs independently of window.onload (which the main app already uses; it is left untouched).
+    refCalc_initialize();
+  </script>
+</body>
+</html>
